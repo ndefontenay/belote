@@ -216,11 +216,16 @@ def ai_bid_round2(hand: List[Card], revealed_suit: str,
     return best_mode
 
 
+def _trick_pts(trick: List[Tuple[int, Card]], trump: str) -> int:
+    """Total point value currently in a trick."""
+    return sum(c.pts(trump) for _, c in trick)
+
+
 def ai_play(hand: List[Card], trick: List[Tuple[int, Card]],
             trump: str, me: int,
             played_cards: Optional[List[Card]] = None,
             contract_player: int = -1) -> Card:
-    """See AI_RULES.md – Playing."""
+    """Belote AI – playing phase."""
     plays   = legal_plays(hand, trick, trump, me)
     played  = set(played_cards) if played_cards else set()
     partner = (me + 2) % 4
@@ -228,36 +233,59 @@ def ai_play(hand: List[Card], trick: List[Tuple[int, Card]],
                             and contract_player % 2 == me % 2
                             and contract_player != me)
 
+    # ── Leading ──────────────────────────────────────────────────────────────
     if not trick:
-        # Priority 1: lead a master card (guaranteed win)
+        # 1. Lead a master card (guaranteed win) — prefer highest value
         masters = [c for c in plays if _is_master(c, trump, played)]
         if masters:
             return max(masters, key=lambda c: c.pts(trump))
+
         ts = [c for c in plays if c.suit == trump]
-        # Priority 2: partner took contract → lead trump to drain opponents
-        if partner_has_contract and ts:
+        # 2. Partner or self took contract → lead trump to exhaust opponents
+        if (partner_has_contract or contract_player == me) and ts:
             return max(ts, key=lambda c: c.power(trump, trump))
-        # Priority 3: we took contract → lead trump aggressively
-        if contract_player == me and ts:
-            return max(ts, key=lambda c: c.power(trump, trump))
-        # Default: highest point value — but avoid leading trump 9 while trump J is still live
+
+        # 3. Default: lead highest-value card, but don't lead trump 9 while J is live
         trump_j_out = any(c.suit == trump and c.rank == 'J' for c in played)
         safe = [c for c in plays
                 if not (c.suit == trump and c.rank == '9' and not trump_j_out)]
         return max((safe or plays), key=lambda c: c.pts(trump))
 
+    # ── Following ─────────────────────────────────────────────────────────────
     led   = trick[0][1].suit
     p_win = who_wins(trick, trump) == partner
+    tv    = _trick_pts(trick, trump)   # points already in the trick
 
-    # Partner winning → give them points
+    # Partner is currently winning this trick
     if p_win:
-        return max(plays, key=lambda c: c.pts(trump))
+        if tv >= 10:
+            # Valuable trick → pile on our best card to maximise haul
+            return max(plays, key=lambda c: c.pts(trump))
+        else:
+            # Cheap trick → discard our least valuable card; save good ones
+            return min(plays, key=lambda c: c.pts(trump))
 
+    # Opponent is currently winning — try to take the trick
     best = max(c.power(trump, led) for _, c in trick)
     win  = [c for c in plays if c.power(trump, led) > best]
+
     if win:
-        return min(win, key=lambda c: c.power(trump, led))
-    return min(plays, key=lambda c: c.pts(trump))
+        if tv >= 10:
+            # Worth taking → use the minimum force needed (save stronger cards)
+            return min(win, key=lambda c: c.power(trump, led))
+        else:
+            # Cheap trick → prefer a non-trump winner to spare our trumps
+            non_trump_win = [c for c in win if c.suit != trump]
+            if non_trump_win:
+                return min(non_trump_win, key=lambda c: c.power(trump, led))
+            # Only trump can win; legal rules already force us to cut → minimise waste
+            return min(win, key=lambda c: c.power(trump, led))
+
+    # Can't win this trick → smart discard
+    # Prefer to shed from suits where we hold no future winners, to protect masters
+    master_suits = {c.suit for c in hand if _is_master(c, trump, played)}
+    discard_pool = [c for c in plays if c.suit not in master_suits] or plays
+    return min(discard_pool, key=lambda c: c.pts(trump))
 
 
 # ── Annonces ───────────────────────────────────────────────────────────────────
