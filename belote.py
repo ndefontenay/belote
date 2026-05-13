@@ -29,7 +29,7 @@ SCORE_W    = 260   # width of the right-side score/history panel
 PLAYER_NAMES = ['You', 'East', 'North', 'West']
 
 # Card dimensions (fixed regardless of window size)
-CW, CH = 80, 112
+CW, CH = 88, 124
 
 # Default window size
 DEFAULT_W, DEFAULT_H = 1260, 860
@@ -592,7 +592,7 @@ class BeloteApp:
                                 fill=color, font=('Helvetica', 12, 'bold'), anchor='nw')
             self.cv.create_text(px + SCORE_W - 8, y, text=str(score),
                                 fill=color, font=('Helvetica', 13, 'bold'), anchor='ne')
-            y += 15
+            y += 20
             # progress bar
             self.cv.create_rectangle(bar_x, y, bar_x + bar_w, y + 8,
                                      fill='#1b4332', outline='#2d6a4f', width=1)
@@ -854,9 +854,15 @@ class BeloteApp:
             self.cv.create_text(east_cx, east_top_y - 16,
                                 text='East  (AI)', fill=C_TEXT,
                                 font=('Helvetica', 14, 'bold'), anchor='center')
-        mg = 85
-        self.cv.create_text(mg, self.CY, text='West  (AI)', fill=C_TEXT,
-                            font=('Helvetica', 14, 'bold'), anchor='center')
+        n3 = len(self.hands[3])
+        if n3 > 0:
+            avail_v = self.H - 250
+            sp3     = min(CH + 4, avail_v // max(n3, 1))
+            west_top_y = self.CY - (sp3 * (n3 - 1) + CH) // 2
+            west_cx    = 70 + CW // 2
+            self.cv.create_text(west_cx, west_top_y - 16,
+                                text='West  (AI)', fill=C_TEXT,
+                                font=('Helvetica', 14, 'bold'), anchor='center')
 
     def _draw_ai_back(self, pidx: int, pos: str):
         W, H, CX, CY = self.W, self.H, self.CX, self.CY
