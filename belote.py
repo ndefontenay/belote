@@ -222,8 +222,9 @@ class BeloteApp:
         self.round_history: List[dict] = []
 
         # Bid-panel hover state
-        self._bid_hover:   Optional[str]  = None
-        self._bid_buttons: dict           = {}
+        self._bid_hover:       Optional[str]  = None
+        self._bid_buttons:     dict           = {}
+        self._bid_pass_flash:  bool           = False
 
         # Round state
         self.hands:           List[List[Card]] = [[], [], [], []]
@@ -341,6 +342,7 @@ class BeloteApp:
         self._draw_trick_area()
         self._draw_all_hands()
         self._draw_trick_stacks()
+        self._draw_contract_chip()
         if self.show_hints.get() and self.phase == 'playing' and self.trump:
             self._draw_suggestions()
         if self.phase == 'bidding':
@@ -359,7 +361,6 @@ class BeloteApp:
             (CX,              H-mg,  'YOU  (South)',          True),
             (W-SCORE_W-mg//2, CY,    'East  (AI)',             False),
             (CX,              50,    'North  (AI · partner)',  True),
-            (mg,              CY,    'West  (AI)',             False),
         ]
         for x, y, label, partner in info:
             clr = C_LIME if partner else C_TEXT
@@ -378,7 +379,7 @@ class BeloteApp:
                                 fill=C_GOLD, font=('Helvetica', 14))
 
         if self.trump:
-            ink  = C_RED if SUIT_RED[self.trump] else C_BLACK
+            ink  = C_RED if SUIT_RED[self.trump] else C_TEXT
             team = 'You & North' if self.contract_player % 2 == 0 else 'East & West'
             self.cv.create_rectangle(8, 8, 240, 68, fill='#0a2218', outline=C_GREEN)
             self.cv.create_text(18, 18, anchor='nw',
@@ -633,6 +634,9 @@ class BeloteApp:
         self._draw_ai_back(2, 'top')
         self._draw_ai_back(1, 'right')
         self._draw_ai_back(3, 'left')
+        mg = 85
+        self.cv.create_text(mg, self.CY, text='West  (AI)', fill=C_TEXT,
+                            font=('Helvetica', 11, 'bold'), anchor='center')
 
     def _draw_ai_back(self, pidx: int, pos: str):
         W, H, CX, CY = self.W, self.H, self.CX, self.CY
@@ -658,24 +662,42 @@ class BeloteApp:
             for i in range(n):
                 self._draw_card_back(70, sy + i*spread)
 
-    def _draw_suggestions(self):
-        W, CX, CY = self.W, self.CX, self.CY
-        hint_pos = {
-            1: (W - SCORE_W - CW - 80, CY - 28),
-            2: (CX - 24,               CY - 168),
-            3: (145,                   CY - 28),
+    def _draw_contract_chip(self):
+        if self.contract_player < 0 or not self.trump:
+            return
+        W, H, CX, CY = self.W, self.H, self.CX, self.CY
+        mg = 85
+        chip_pos = {
+            0: (CX + 80,                    H - mg),
+            1: (W - SCORE_W - mg // 2 + 55, CY - 18),
+            2: (CX + 80,                    55),
+            3: (mg + CW + 30,               CY),
         }
-        for pidx in (1, 2, 3):
-            if not self.hands[pidx] or not self.trump:
-                continue
-            card = ai_play(self.hands[pidx], self.trick, self.trump, pidx,
-                           self.played_cards, self.contract_player)
-            sx, sy = hint_pos[pidx]
-            self.cv.create_rectangle(sx-6, sy-18, sx+56, sy+74,
-                                     fill='#111', outline=C_GOLD, width=2)
-            self.cv.create_text(sx+24, sy-8, text='plays:',
-                                fill=C_GOLD, font=('Helvetica', 8))
-            self._draw_mini_card(sx, sy, card)
+        cpx, cpy = chip_pos[self.contract_player]
+        r = 11
+        self.cv.create_oval(cpx - r, cpy - r, cpx + r, cpy + r,
+                            fill='#1a1a1a', outline=C_GOLD, width=3)
+        self.cv.create_text(cpx, cpy, text='C',
+                            fill=C_GOLD, font=('Helvetica', 9, 'bold'))
+
+    def _draw_suggestions(self):
+        hand = self.hands[0]
+        if not hand or not self.trump or self.phase != 'playing' or self.current != 0:
+            return
+        suggestion = ai_play(hand, self.trick, self.trump, 0,
+                             self.played_cards, self.contract_player)
+        W, H, CX = self.W, self.H, self.CX
+        n      = len(hand)
+        avail  = W - 120
+        spread = min(CW + 6, avail // max(n, 1))
+        sx0    = CX - (spread * (n - 1) + CW) // 2
+        y      = H - CH - 18
+        for i, card in enumerate(hand):
+            if card == suggestion:
+                cx = sx0 + i * spread + CW // 2
+                self.cv.create_text(cx, y - 16, text='★',
+                                    fill=C_GOLD, font=('Helvetica', 11, 'bold'))
+                break
 
     # ── Hover handling ─────────────────────────────────────────────────────────
     def _on_mouse_motion(self, event):
@@ -804,6 +826,13 @@ class BeloteApp:
                 font=('Helvetica', 13, 'bold'), tags=(tag,))
             self.cv.tag_bind(tag, '<Button-1>', lambda e: self._on_bid_pass())
             self._bid_buttons[tag] = (bx, btn_y, bx + btn_w, btn_y + btn_h)
+
+        if self._bid_pass_flash:
+            self._rrect(px + pw//2 - 90, py + 20, 180, 80, r=10,
+                        fill='#1b4332', outline=C_LIME, width=3)
+            self.cv.create_text(px + pw//2, py + 60,
+                text='Passed  ✓', fill=C_LIME,
+                font=('Helvetica', 16, 'bold'))
 
     # ── Score overlay ──────────────────────────────────────────────────────────
     def _draw_score_overlay(self):
@@ -1026,6 +1055,12 @@ class BeloteApp:
         self._apply_take(0, suit)
 
     def _on_bid_pass(self):
+        self._bid_pass_flash = True
+        self._redraw()
+        self.root.after(280, self._execute_bid_pass)
+
+    def _execute_bid_pass(self):
+        self._bid_pass_flash = False
         self._apply_pass(0)
 
     # ── Play flow ──────────────────────────────────────────────────────────────
@@ -1085,12 +1120,14 @@ class BeloteApp:
             capot = (self.tricks_won[1 - team] == 0)
             self.trick_pts[team] += 100 if capot else 10
 
-        self.trick   = []
-        self.current = winner
-
         if is_last:
-            self._finish_round()
+            self.current = winner
+            self.phase   = 'last_trick'
+            self.status.config(text='Click anywhere to continue ▶')
+            self._redraw()
         else:
+            self.trick   = []
+            self.current = winner
             self.status.config(text=f'{PLAYER_NAMES[winner]} wins the trick')
             self._redraw()
             if self.current != 0:
@@ -1161,6 +1198,10 @@ class BeloteApp:
 
     # ── Click handling ─────────────────────────────────────────────────────────
     def _on_canvas_click(self, event):
+        if self.phase == 'last_trick':
+            self.trick = []
+            self._finish_round()
+            return
         if self.phase != 'playing' or self.current != 0:
             return
         hand = self.hands[0]
