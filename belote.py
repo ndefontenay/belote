@@ -177,6 +177,10 @@ class BeloteApp:
         self.round_num    = 0
         self.round_history: List[dict] = []
 
+        # Bid-panel hover state
+        self._bid_hover:   Optional[str]  = None
+        self._bid_buttons: dict           = {}
+
         # Round state
         self.hands:           List[List[Card]] = [[], [], [], []]
         self.trump:           Optional[str]    = None
@@ -218,6 +222,8 @@ class BeloteApp:
         self.cv.pack(fill='both', expand=True)
         self.cv.bind('<Button-1>', self._on_canvas_click)
         self.cv.bind('<Configure>', lambda e: self._redraw())
+        self.cv.bind('<Motion>', self._on_mouse_motion)
+        self.cv.bind('<Leave>', self._on_mouse_leave)
 
         bar = tk.Frame(self.root, bg=BG_DARK, height=46)
         bar.pack(fill='x')
@@ -534,14 +540,46 @@ class BeloteApp:
                                 fill=C_GOLD, font=('Helvetica', 8))
             self._draw_mini_card(sx, sy, card)
 
+    # ── Hover handling ─────────────────────────────────────────────────────────
+    def _on_mouse_motion(self, event):
+        if self.phase != 'bidding' or self.current != 0:
+            if self._bid_hover is not None:
+                self._bid_hover = None
+                self.cv.config(cursor='')
+            return
+        new_hover = None
+        for name, (x1, y1, x2, y2) in self._bid_buttons.items():
+            if x1 <= event.x <= x2 and y1 <= event.y <= y2:
+                new_hover = name
+                break
+        self.cv.config(cursor='hand2' if new_hover else '')
+        if new_hover != self._bid_hover:
+            self._bid_hover = new_hover
+            self._redraw()
+
+    def _on_mouse_leave(self, event):
+        if self._bid_hover is not None:
+            self._bid_hover = None
+            self.cv.config(cursor='')
+            self._redraw()
+
     # ── Bid panel ──────────────────────────────────────────────────────────────
+    def _btn_style(self, name: str, normal_fill: str, normal_ol: str,
+                   hover_fill: str, hover_ol: str):
+        """Return (fill, outline) for a bid button, brightened when hovered."""
+        if self._bid_hover == name:
+            return hover_fill, hover_ol
+        return normal_fill, normal_ol
+
     def _draw_bid_panel(self):
         W, H, CX = self.W, self.H, self.CX
-        hand_y = H - CH - 18           # top of human hand
+        hand_y = H - CH - 18
         ph     = 120
-        py     = hand_y - ph - 12      # just above the hand
+        py     = hand_y - ph - 12
         pw     = min(680, W - 80)
         px     = (W - pw) // 2
+
+        self._bid_buttons.clear()
 
         self._rrect(px, py, pw, ph, r=12,
                     fill='#0a2218', outline=C_GREEN, width=2)
@@ -557,23 +595,33 @@ class BeloteApp:
             btn_h = 52
             btn_y = py + ph//2 - btn_h//2 + 8
 
+            # Take button – green, positive action
+            bx = px + pw//4 - btn_w//2
+            fill, ol = self._btn_style('bid_take',
+                                       '#1b4332', C_GOLD,
+                                       '#2d8a58', '#ffe44d')
             tag = 'bid_take'
-            self._rrect(px + pw//4 - btn_w//2, btn_y, btn_w, btn_h, r=8,
-                        fill='#1b4332', outline=C_GOLD, width=2, tags=(tag,))
+            self._rrect(bx, btn_y, btn_w, btn_h, r=8,
+                        fill=fill, outline=ol, width=2, tags=(tag,))
             self.cv.create_text(px + pw//4, btn_y + btn_h//2,
                 text=f'Take  {suit}', fill=C_TEXT,
                 font=('Helvetica', 14, 'bold'), tags=(tag,))
-            self.cv.tag_bind(tag, '<Button-1>',
-                             lambda e: self._on_bid_take(None))
+            self.cv.tag_bind(tag, '<Button-1>', lambda e: self._on_bid_take(None))
+            self._bid_buttons[tag] = (bx, btn_y, bx + btn_w, btn_y + btn_h)
 
+            # Pass button – dark maroon, clearly clickable but declining
+            bx = px + 3*pw//4 - btn_w//2
+            fill, ol = self._btn_style('bid_pass',
+                                       '#3d1818', '#c03030',
+                                       '#5c2222', '#e84040')
             tag = 'bid_pass'
-            self._rrect(px + 3*pw//4 - btn_w//2, btn_y, btn_w, btn_h, r=8,
-                        fill='#222', outline='#666', width=2, tags=(tag,))
+            self._rrect(bx, btn_y, btn_w, btn_h, r=8,
+                        fill=fill, outline=ol, width=2, tags=(tag,))
             self.cv.create_text(px + 3*pw//4, btn_y + btn_h//2,
-                text='Pass', fill=C_GRAY,
+                text='Pass', fill=C_TEXT,
                 font=('Helvetica', 14, 'bold'), tags=(tag,))
-            self.cv.tag_bind(tag, '<Button-1>',
-                             lambda e: self._on_bid_pass())
+            self.cv.tag_bind(tag, '<Button-1>', lambda e: self._on_bid_pass())
+            self._bid_buttons[tag] = (bx, btn_y, bx + btn_w, btn_y + btn_h)
 
         else:
             revealed = self.revealed_card.suit
@@ -583,7 +631,7 @@ class BeloteApp:
                      f'(choose trump, not {revealed})',
                 fill=C_TEXT, font=('Helvetica', 11, 'bold'))
 
-            n_btns  = 4   # 3 suits + pass
+            n_btns  = 4
             btn_w   = min(120, (pw - 40) // n_btns - 8)
             btn_h   = 52
             btn_y   = py + ph//2 - btn_h//2 + 8
@@ -594,23 +642,31 @@ class BeloteApp:
                 bx  = bx0 + i * (btn_w + 12)
                 ink = C_RED if SUIT_RED[s] else C_BLACK
                 tag = f'bid_suit_{s}'
+                fill, ol = self._btn_style(tag,
+                                           '#fefae0', C_GOLD,
+                                           '#fff8b0', '#ffe44d')
                 self._rrect(bx, btn_y, btn_w, btn_h, r=8,
-                            fill='#fefae0', outline=C_GOLD, width=2, tags=(tag,))
+                            fill=fill, outline=ol, width=2, tags=(tag,))
                 self.cv.create_text(bx + btn_w//2, btn_y + btn_h//2,
                     text=s, fill=ink,
                     font=('Helvetica', 24), tags=(tag,))
                 self.cv.tag_bind(tag, '<Button-1>',
                                  lambda e, suit=s: self._on_bid_take(suit))
+                self._bid_buttons[tag] = (bx, btn_y, bx + btn_w, btn_y + btn_h)
 
+            # Pass button (round 2)
             bx  = bx0 + 3 * (btn_w + 12)
+            fill, ol = self._btn_style('bid_pass2',
+                                       '#3d1818', '#c03030',
+                                       '#5c2222', '#e84040')
             tag = 'bid_pass2'
             self._rrect(bx, btn_y, btn_w, btn_h, r=8,
-                        fill='#222', outline='#666', width=2, tags=(tag,))
+                        fill=fill, outline=ol, width=2, tags=(tag,))
             self.cv.create_text(bx + btn_w//2, btn_y + btn_h//2,
-                text='Pass', fill=C_GRAY,
+                text='Pass', fill=C_TEXT,
                 font=('Helvetica', 13, 'bold'), tags=(tag,))
-            self.cv.tag_bind(tag, '<Button-1>',
-                             lambda e: self._on_bid_pass())
+            self.cv.tag_bind(tag, '<Button-1>', lambda e: self._on_bid_pass())
+            self._bid_buttons[tag] = (bx, btn_y, bx + btn_w, btn_y + btn_h)
 
     # ── Score overlay ──────────────────────────────────────────────────────────
     def _draw_score_overlay(self):
