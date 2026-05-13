@@ -9,6 +9,335 @@ import random
 import math
 from typing import List, Tuple, Optional
 
+# ── Internationalisation ───────────────────────────────────────────────────────
+STRINGS: dict = {
+    'en': {
+        # bar
+        'show_hints':    'Show AI suggestions',
+        'new_game':      'New Game',
+        'card_back':     'Card back:',
+        'blossom':       '🌸 Blossom',
+        'ocean':         '🌊 Ocean',
+        'help_btn':      '? Help',
+        # mode labels
+        'mode_sa':       'No Trump',
+        'mode_ta':       'All Trump',
+        'mode_trump_lbl':'Trump {suit}',
+        # players / teams
+        'p0': 'You', 'p1': 'East', 'p2': 'North', 'p3': 'West',
+        'team0':         'You & North',
+        'team1':         'East & West',
+        'team0_short':   'Y+N',
+        'team1_short':   'E+W',
+        'score_need':    'Need  YN:{n0}  EW:{n1}',
+        'score_yn':      'YN:{n0}  EW:{n1}',
+        # dealing
+        'deal_prompt':   'Your turn to deal – choose:',
+        'shuffle_deal':  'Shuffle & Deal',
+        'cut_deal':      'Cut & Deal',
+        'your_deal':     'Your turn to deal',
+        # bidding
+        'bid_r1':        'Bidding – round 1',
+        'bid_r2':        'Bidding – round 2',
+        'bid_prompt_r1': 'Round 1 of 2  (accept {suit} as trump, or pass)',
+        'bid_prompt_r2': 'Round 2  (not {suit}){best}',
+        'best_bid_lbl':  '  |  best: {mode}  ({player})',
+        'take_btn':      'Take  {suit}',
+        'pass_btn':      'Pass',
+        'passed_flash':  'Passed  ✓',
+        'bid_pass':      'Pass',
+        'bid_takes':     'Takes  {mode}',
+        # status
+        'p_takes':       '{player} takes – {mode}  ({rnd})',
+        'p_passes':      '{player} passes',
+        'p_bids':        '{player} bids {mode}  (best: {best})',
+        'no_takers':     'No takers – redealing…',
+        'announcing':    'Declarations – click anywhere to play',
+        'playing':       'Playing  –  {mode}',
+        'wins_trick':    '{player} wins the trick',
+        'click_cont':    'Click anywhere to continue ▶',
+        'round_over_st': 'Round over – see results',
+        'belote_status': '{word}  ({player})',
+        # center info
+        'you_south':     'YOU  (South)',
+        'north_ai':      'North  (AI · partner)',
+        'east_ai':       'East  (AI)',
+        'west_ai':       'West  (AI)',
+        'mode_normal':   'Standard',
+        'mode_notrump':  'No trump',
+        'takers':        'Takers: {team}',
+        'litige_info':   'Litige: {pts} pts in play',
+        'revealed_card': 'Revealed card',
+        # trick pts hud
+        'you_n_pts':     'You+N: {pts}',
+        'ew_pts':        'E+W: {pts}',
+        'need_to_win':   'need {n} to win',
+        # annonce panel
+        'ann_header':    'Declarations',
+        'ann_none':      'No declarations this round',
+        'ann_carre':     'Four {rank}s ({pts})',
+        'ann_suite':     'Run-{n} {suit} to {top} ({pts})',
+        'ann_wins':      '{team} win declarations  +{pts} pts',
+        'ann_void':      'Declarations void',
+        'play_btn':      'Play ▶',
+        # score overlay
+        'result_success':'Contract made  ✓',
+        'result_chute':  'Contract failed  ✗',
+        'result_litige': 'Tied  ⚖  (81 – 81)',
+        'result_capot':  'Capot  ★  (all 8 tricks!)',
+        'round_over_hdr':'Round over',
+        'mode_takers':   'Mode: {mode}  |  Takers: {team}',
+        'taker_pts_line':'  {team}  trick pts: {pts}  (need {n})',
+        'def_pts_line':  '{team}  trick pts: {pts}',
+        'belote_bonus':  'Belote: {team} +20 pts',
+        'ann_bonus':     'Declarations: {team} +{pts} pts',
+        'taker_total':   '{team}  total: {pts}',
+        'def_total':     '{team}  total: {pts}',
+        'running_scores':'Running scores:',
+        'scores_line':   'You & North: {s0}   East & West: {s1}',
+        'next_round':    'Next round ▶',
+        # game over
+        'game_over':     'Game Over',
+        'winner_line':   '  {team} win!',
+        'final_scores':  'Final: You & North {s0}   East & West {s1}',
+        'new_game_btn':  'New Game',
+        # score panel
+        'first_to':      'FIRST TO {n}',
+        'round_hist':    'Round History  (#{n})',
+        'order_hdr':     'Order  (strongest → weakest)',
+        'trump_col':     'Trump / All',
+        'plain_col':     'No Trump / Suit',
+        # trick stacks
+        'stack_yn':      'You+N',
+        'stack_ew':      'E+W',
+        # round (in p_takes)
+        'rnd1':          'round 1',
+        'rnd2':          'round 2',
+    },
+    'fr': {
+        # bar
+        'show_hints':    'Afficher les suggestions IA',
+        'new_game':      'Nouvelle Partie',
+        'card_back':     'Dos de carte :',
+        'blossom':       '🌸 Cerisier',
+        'ocean':         '🌊 Océan',
+        'help_btn':      '? Aide',
+        # mode labels
+        'mode_sa':       'Sans Atout',
+        'mode_ta':       'Tout Atout',
+        'mode_trump_lbl':'Atout {suit}',
+        # players / teams
+        'p0': 'Vous', 'p1': 'Est', 'p2': 'Nord', 'p3': 'Ouest',
+        'team0':         'Vous & Nord',
+        'team1':         'Est & Ouest',
+        'team0_short':   'V+N',
+        'team1_short':   'E+O',
+        'score_need':    'Manque  VN:{n0}  EO:{n1}',
+        'score_yn':      'VN:{n0}  EO:{n1}',
+        # dealing
+        'deal_prompt':   'Votre tour de donner – choisissez :',
+        'shuffle_deal':  'Battre & Donner',
+        'cut_deal':      'Couper & Donner',
+        'your_deal':     'Votre tour de donner',
+        # bidding
+        'bid_r1':        'Tour de prise – round 1',
+        'bid_r2':        'Tour de prise – round 2',
+        'bid_prompt_r1': 'Round 1 sur 2  (accepter {suit} comme atout, ou passer)',
+        'bid_prompt_r2': 'Round 2  (pas {suit}){best}',
+        'best_bid_lbl':  '  |  meilleure : {mode}  ({player})',
+        'take_btn':      'Prendre  {suit}',
+        'pass_btn':      'Passer',
+        'passed_flash':  'Passé  ✓',
+        'bid_pass':      'Passe',
+        'bid_takes':     'Prend  {mode}',
+        # status
+        'p_takes':       '{player} prend – {mode}  ({rnd})',
+        'p_passes':      '{player} passe',
+        'p_bids':        '{player} annonce {mode}  (meilleure : {best})',
+        'no_takers':     'Personne ne prend – redistribution…',
+        'announcing':    'Annonces – cliquer pour jouer',
+        'playing':       'Jeu  –  {mode}',
+        'wins_trick':    '{player} remporte le pli',
+        'click_cont':    'Cliquer pour continuer ▶',
+        'round_over_st': 'Manche terminée – voir résultats',
+        'belote_status': '{word}  ({player})',
+        # center info
+        'you_south':     'VOUS  (Sud)',
+        'north_ai':      'Nord  (IA · partenaire)',
+        'east_ai':       'Est  (IA)',
+        'west_ai':       'Ouest  (IA)',
+        'mode_normal':   'Normale',
+        'mode_notrump':  "Pas d'atout",
+        'takers':        'Preneurs : {team}',
+        'litige_info':   'Litige : {pts} pts en jeu',
+        'revealed_card': 'Carte retournée',
+        # trick pts hud
+        'you_n_pts':     'V+N : {pts}',
+        'ew_pts':        'E+O : {pts}',
+        'need_to_win':   'besoin de {n}',
+        # annonce panel
+        'ann_header':    'Annonces',
+        'ann_none':      "Pas d'annonces cette manche",
+        'ann_carre':     'Carré de {rank}s ({pts})',
+        'ann_suite':     'Suite-{n} {suit} à {top} ({pts})',
+        'ann_wins':      '{team} remporte les annonces  +{pts} pts',
+        'ann_void':      'Annonces annulées',
+        'play_btn':      'Jouer ▶',
+        # score overlay
+        'result_success':'Contrat réussi  ✓',
+        'result_chute':  'Chute  ✗  (contrat échoué)',
+        'result_litige': 'Litige  ⚖  (81 – 81)',
+        'result_capot':  'Capot  ★  (8 plis sur 8 !)',
+        'round_over_hdr':'Manche terminée',
+        'mode_takers':   'Mode : {mode}  |  Preneurs : {team}',
+        'taker_pts_line':'  {team}  pts plis : {pts}  (besoin de {n})',
+        'def_pts_line':  '{team}  pts plis : {pts}',
+        'belote_bonus':  'Belote : {team} +20 pts',
+        'ann_bonus':     'Annonces : {team} +{pts} pts',
+        'taker_total':   '{team}  total : {pts}',
+        'def_total':     '{team}  total : {pts}',
+        'running_scores':'Scores en cours :',
+        'scores_line':   'Vous & Nord : {s0}   Est & Ouest : {s1}',
+        'next_round':    'Manche suivante ▶',
+        # game over
+        'game_over':     'Partie terminée',
+        'winner_line':   '  {team} gagnent !',
+        'final_scores':  'Final : Vous & Nord {s0}   Est & Ouest {s1}',
+        'new_game_btn':  'Nouvelle Partie',
+        # score panel
+        'first_to':      'PREMIER À {n}',
+        'round_hist':    'Historique  (#{n})',
+        'order_hdr':     'Ordre  (fort → faible)',
+        'trump_col':     'Atout / TA',
+        'plain_col':     'SA / Couleur',
+        # trick stacks
+        'stack_yn':      'V+N',
+        'stack_ew':      'E+O',
+        # round
+        'rnd1':          'round 1',
+        'rnd2':          'round 2',
+    },
+}
+
+HELP_TEXT: dict = {
+    'en': """\
+BELOTE – How to Play
+
+OVERVIEW
+Belote is a French trick-taking card game for 4 players in 2 teams:
+  • You & North  vs  East & West
+  • First team to reach 501 points wins.
+
+THE DECK
+32 cards: 7, 8, 9, 10, J, Q, K, A in four suits (♠ ♥ ♦ ♣).
+
+DEALING
+Each player receives 5 cards initially. One card is turned face-up to start
+bidding. The taker receives the revealed card plus extra cards to complete
+their hand to 8.
+
+BIDDING
+Round 1 – Players in turn decide whether to take the revealed card's suit as
+  trump, or pass.
+Round 2 – If nobody took in round 1, players may bid any other suit, No Trump
+  (SA) or All Trump (TA). Highest bid wins after all 4 have spoken. If nobody
+  bids, the cards are redealt.
+
+CARD RANKING & POINTS
+Trump suit (and All Trump mode):
+  J=20  9=14  A=11  10=10  K=4  Q=3  8=0  7=0
+Non-trump suits (and No Trump mode):
+  A=11  10=10  K=4  Q=3  J=2  9=0  8=0  7=0
+
+SPECIAL MODES
+  No Trump (SA)  – All suits use plain ranking. Score threshold: 66 pts.
+  All Trump (TA) – All suits use trump ranking. Score threshold: 130 pts.
+
+PLAYING TRICKS
+  • You must follow the led suit if possible.
+  • If you cannot follow suit, you must play trump (if you hold any).
+  • Highest trump wins the trick; otherwise highest card of the led suit wins.
+  • 8 tricks are played per round.
+
+WINNING THE CONTRACT
+  The taking team must score at least the threshold in trick points to succeed.
+  On failure (Chute), the defending team scores everything.
+  Capot: one team takes all 8 tricks – bonus points apply.
+
+BELOTE
+  Holding both K and Q of the trump suit earns +20 points (automatically
+  awarded when both cards are played – "Belote!" then "Rebelote!").
+
+DECLARATIONS (Annonces)
+  Sequences of 3 or more consecutive cards in the same suit score bonus points.
+  Four of a kind (same rank in all four suits) also score.
+  Only the team with the highest single declaration scores all declaration points.
+
+LITIGE
+  If a round ends 81–81 (exact tie), the points carry over to the next round.
+""",
+    'fr': """\
+BELOTE – Comment jouer
+
+PRÉSENTATION
+La belote est un jeu de cartes français à plis pour 4 joueurs en 2 équipes :
+  • Vous & Nord  contre  Est & Ouest
+  • La première équipe à atteindre 501 points gagne.
+
+LE JEU
+32 cartes : 7, 8, 9, 10, V, D, R, A dans les quatre couleurs (♠ ♥ ♦ ♣).
+
+LA DONNE
+Chaque joueur reçoit d'abord 5 cartes. Une carte est retournée face visible
+pour lancer les enchères. Le preneur reçoit cette carte plus des cartes
+supplémentaires pour compléter son jeu à 8 cartes.
+
+LES ENCHÈRES
+Tour 1 – Chacun décide de prendre la couleur de la carte retournée comme
+  atout, ou de passer.
+Tour 2 – Si personne ne prend au tour 1, les joueurs peuvent annoncer une
+  autre couleur, Sans Atout (SA) ou Tout Atout (TA). La meilleure annonce
+  l'emporte après que les 4 joueurs ont parlé. Si personne ne prend, les
+  cartes sont redistribuées.
+
+VALEUR DES CARTES
+Couleur d'atout (et mode Tout Atout) :
+  V=20  9=14  A=11  10=10  R=4  D=3  8=0  7=0
+Couleurs normales (et mode Sans Atout) :
+  A=11  10=10  R=4  D=3  V=2  9=0  8=0  7=0
+
+MODES SPÉCIAUX
+  Sans Atout (SA)  – Toutes les couleurs utilisent l'ordre normal. Seuil : 66 pts.
+  Tout Atout (TA)  – Toutes les couleurs utilisent l'ordre atout. Seuil : 130 pts.
+
+LE JEU DES PLIS
+  • Vous devez fournir la couleur demandée si vous en avez.
+  • Sinon, vous devez couper (jouer atout) si vous en avez.
+  • La carte d'atout la plus forte l'emporte ; sinon c'est la plus forte carte
+    de la couleur demandée.
+  • 8 plis sont joués par manche.
+
+RÉUSSIR SON CONTRAT
+  L'équipe preneuse doit atteindre le seuil en points de plis pour réussir.
+  En cas de chute, l'équipe adverse marque tous les points.
+  Capot : une équipe remporte les 8 plis – un bonus s'applique.
+
+BELOTE
+  Détenir le Roi et la Dame d'atout rapporte +20 points (attribués
+  automatiquement lorsque les deux cartes sont jouées – « Belote ! »
+  puis « Rebelote ! »).
+
+ANNONCES
+  Des suites d'au moins 3 cartes consécutives dans la même couleur rapportent
+  des points bonus. Un carré (même valeur dans les 4 couleurs) rapporte aussi.
+  Seule l'équipe ayant la meilleure annonce individuelle marque tous les points.
+
+LITIGE
+  Si une manche se termine à égalité 81–81, les points sont reportés à la
+  manche suivante.
+""",
+}
+
 # ── Constants ──────────────────────────────────────────────────────────────────
 SUITS      = ['♠', '♥', '♦', '♣']
 SUIT_RED   = {'♠': False, '♥': True, '♦': True, '♣': False}
@@ -27,7 +356,10 @@ BID_RANK  = {m: i for i, m in enumerate(BID_MODES)}
 WIN_TARGET = 501
 SCORE_W    = 260   # width of the right-side score/history panel
 
-PLAYER_NAMES = ['You', 'East', 'North', 'West']
+PLAYER_NAMES = {
+    'en': ['You',  'East', 'North', 'West'],
+    'fr': ['Vous', 'Est',  'Nord',  'Ouest'],
+}
 
 # Card dimensions (fixed regardless of window size)
 CW, CH = 88, 124
@@ -401,12 +733,10 @@ def ann_winner_team(all_ann: List[List[dict]], trump: str) -> int:
 
 
 # ── Mode helpers ───────────────────────────────────────────────────────────────
-def _mode_label(trump: Optional[str]) -> str:
-    if trump == 'SA':
-        return 'Sans Atout'
-    if trump == 'TA':
-        return 'Tout Atout'
-    return f'Atout {trump}' if trump else '?'
+def _mode_label(trump: Optional[str], lang: str = 'en') -> str:
+    if trump == 'SA': return STRINGS[lang]['mode_sa']
+    if trump == 'TA': return STRINGS[lang]['mode_ta']
+    return STRINGS[lang]['mode_trump_lbl'].format(suit=trump) if trump else '?'
 
 
 def _score_threshold(trump: Optional[str]) -> int:
@@ -437,6 +767,7 @@ class BeloteApp:
 
         self.show_hints      = tk.BooleanVar(value=True)
         self.card_back_style = tk.IntVar(value=0)
+        self.lang            = tk.StringVar(value='en')
 
         # Live layout (updated on every redraw from canvas size)
         self.W  = DEFAULT_W
@@ -518,29 +849,102 @@ class BeloteApp:
         bar.pack(fill='x')
         bar.pack_propagate(False)
 
-        tk.Checkbutton(bar, text='Show AI suggestions',
-                       variable=self.show_hints, command=self._redraw,
-                       bg=BG_DARK, fg=C_TEXT, selectcolor='#0a2218',
-                       activebackground=BG_DARK, activeforeground=C_TEXT,
-                       font=('Helvetica', 15)).pack(side='left', padx=18, pady=10)
+        lang = self.lang.get()
+
+        self._hints_cb = tk.Checkbutton(
+            bar, text=STRINGS[lang]['show_hints'],
+            variable=self.show_hints, command=self._redraw,
+            bg=BG_DARK, fg=C_TEXT, selectcolor='#0a2218',
+            activebackground=BG_DARK, activeforeground=C_TEXT,
+            font=('Helvetica', 15))
+        self._hints_cb.pack(side='left', padx=18, pady=10)
 
         self.status = tk.Label(bar, text='', bg=BG_DARK, fg=C_GOLD,
                                font=('Helvetica', 15, 'bold'))
         self.status.pack(side='left', padx=18)
 
-        tk.Button(bar, text='New Game', command=self._new_game,
-                  bg='#991b1b', fg='white', relief='flat',
-                  font=('Helvetica', 14, 'bold'), padx=12, pady=4,
-                  cursor='hand2').pack(side='right', padx=18, pady=8)
+        self._new_game_btn = tk.Button(
+            bar, text=STRINGS[lang]['new_game'], command=self._new_game,
+            bg='#991b1b', fg='white', relief='flat',
+            font=('Helvetica', 14, 'bold'), padx=12, pady=4, cursor='hand2')
+        self._new_game_btn.pack(side='right', padx=18, pady=8)
 
-        tk.Label(bar, text='Card back:', bg=BG_DARK, fg=C_TEXT,
-                 font=('Helvetica', 13)).pack(side='right', padx=(12, 4))
-        for i, label in enumerate(['🌸 Blossom', '🌊 Ocean']):
-            tk.Radiobutton(bar, text=label, variable=self.card_back_style, value=i,
-                           command=self._redraw, bg=BG_DARK, fg=C_TEXT,
-                           selectcolor='#0a2218', activebackground=BG_DARK,
-                           activeforeground=C_TEXT,
-                           font=('Helvetica', 13)).pack(side='right', padx=6, pady=8)
+        self._help_btn = tk.Button(
+            bar, text=STRINGS[lang]['help_btn'], command=self._show_help,
+            bg='#1e3a5f', fg='white', relief='flat',
+            font=('Helvetica', 14, 'bold'), padx=10, pady=4, cursor='hand2')
+        self._help_btn.pack(side='right', padx=6, pady=8)
+
+        tk.Label(bar, text='Lang:', bg=BG_DARK, fg=C_TEXT,
+                 font=('Helvetica', 13)).pack(side='right', padx=(10, 2))
+        for val, lbl in [('en', 'EN'), ('fr', 'FR')]:
+            tk.Radiobutton(
+                bar, text=lbl, variable=self.lang, value=val,
+                command=self._on_lang_change,
+                bg=BG_DARK, fg=C_TEXT, selectcolor='#0a2218',
+                activebackground=BG_DARK, activeforeground=C_TEXT,
+                font=('Helvetica', 13, 'bold')).pack(side='right', padx=4, pady=8)
+
+        self._card_back_lbl = tk.Label(
+            bar, text=STRINGS[lang]['card_back'],
+            bg=BG_DARK, fg=C_TEXT, font=('Helvetica', 13))
+        self._card_back_lbl.pack(side='right', padx=(12, 4))
+
+        self._back_rbs = []
+        for i, key in enumerate(['blossom', 'ocean']):
+            rb = tk.Radiobutton(
+                bar, text=STRINGS[lang][key],
+                variable=self.card_back_style, value=i,
+                command=self._redraw,
+                bg=BG_DARK, fg=C_TEXT, selectcolor='#0a2218',
+                activebackground=BG_DARK, activeforeground=C_TEXT,
+                font=('Helvetica', 13))
+            rb.pack(side='right', padx=6, pady=8)
+            self._back_rbs.append(rb)
+
+    # ── i18n helpers ───────────────────────────────────────────────────────────
+    def t(self, key: str, **kwargs) -> str:
+        s = STRINGS[self.lang.get()][key]
+        return s.format(**kwargs) if kwargs else s
+
+    def pname(self, idx: int) -> str:
+        return STRINGS[self.lang.get()][f'p{idx}']
+
+    def ml(self, trump: Optional[str]) -> str:
+        return _mode_label(trump, self.lang.get())
+
+    def team(self, idx: int) -> str:
+        return self.t(f'team{idx}')
+
+    def _on_lang_change(self):
+        lang = self.lang.get()
+        self._hints_cb.config(text=STRINGS[lang]['show_hints'])
+        self._new_game_btn.config(text=STRINGS[lang]['new_game'])
+        self._card_back_lbl.config(text=STRINGS[lang]['card_back'])
+        for i, rb in enumerate(self._back_rbs):
+            rb.config(text=STRINGS[lang][['blossom', 'ocean'][i]])
+        self._help_btn.config(text=STRINGS[lang]['help_btn'])
+        self._redraw()
+
+    def _show_help(self):
+        lang = self.lang.get()
+        popup = tk.Toplevel(self.root)
+        popup.title('Help' if lang == 'en' else 'Aide')
+        popup.configure(bg='#0a2218')
+        popup.resizable(False, False)
+        txt = tk.Text(popup, bg='#0a2218', fg='#d8e8d8',
+                      font=('Courier', 12), wrap='word',
+                      padx=20, pady=12, bd=0, width=68, height=38,
+                      relief='flat')
+        txt.pack(fill='both', expand=True, padx=10, pady=(10, 0))
+        txt.insert('end', HELP_TEXT[lang])
+        txt.config(state='disabled')
+        tk.Button(popup,
+                  text='Close' if lang == 'en' else 'Fermer',
+                  command=popup.destroy,
+                  bg='#991b1b', fg='white', relief='flat',
+                  font=('Helvetica', 14, 'bold'),
+                  padx=14, pady=5, cursor='hand2').pack(pady=10)
 
     # ── Drawing primitives ─────────────────────────────────────────────────────
     def _rrect(self, x, y, w, h, r=8, **kw):
@@ -741,8 +1145,8 @@ class BeloteApp:
         self.cv.create_oval(40, 30, W-40, H-20,
                             fill=BG, outline=C_GREEN, width=3)
         info = [
-            (CX,              H-mg,  'YOU  (South)',          True),
-            (CX,              50,    'North  (AI · partner)',  True),
+            (CX,              H-mg,  self.t('you_south'),   True),
+            (CX,              50,    self.t('north_ai'),    True),
         ]
         for x, y, label, partner in info:
             clr = C_LIME if partner else C_TEXT
@@ -761,38 +1165,38 @@ class BeloteApp:
                                 fill=C_GOLD, font=('Helvetica', 17))
 
         if self.trump:
-            team = 'You & North' if self.contract_player % 2 == 0 else 'East & West'
+            team = self.team(0) if self.contract_player % 2 == 0 else self.team(1)
             self.cv.create_rectangle(8, 8, 240, 78, fill='#0a2218', outline=C_GREEN)
             if self.trump in ('SA', 'TA'):
-                mode_name = 'Sans Atout' if self.trump == 'SA' else 'Tout Atout'
+                mode_name = self.ml(self.trump)
                 self.cv.create_text(18, 18, anchor='nw',
                     text=mode_name,
                     fill=C_TEXT, font=('Helvetica', 16, 'bold'))
                 self.cv.create_text(18, 40, anchor='nw',
-                    text='Pas d\'atout',
+                    text=self.t('mode_notrump'),
                     fill=C_GRAY, font=('Helvetica', 12, 'italic'))
             else:
                 ink = C_RED if SUIT_RED[self.trump] else C_TEXT
                 self.cv.create_text(18, 18, anchor='nw',
-                    text=f'Atout: {self.trump}',
+                    text=self.ml(self.trump),
                     fill=ink, font=('Helvetica', 16, 'bold'))
                 self.cv.create_text(18, 40, anchor='nw',
-                    text='Normale',
+                    text=self.t('mode_normal'),
                     fill=C_GRAY, font=('Helvetica', 12, 'italic'))
             self.cv.create_text(18, 57, anchor='nw',
-                text=f'Preneurs: {team}',
+                text=self.t('takers', team=team),
                 fill=C_GOLD, font=('Helvetica', 13))
 
         if self.belote_player >= 0 and self.belote_played > 0:
             msg       = 'Rebelote!' if self.belote_played >= 2 else 'Belote!'
-            team_name = 'You & North' if self.belote_player % 2 == 0 else 'East & West'
+            team_name = self.team(0) if self.belote_player % 2 == 0 else self.team(1)
             self.cv.create_text(18, 82, anchor='nw',
                 text=f'{msg}  ({team_name})',
                 fill='#ff9f40', font=('Helvetica', 13, 'bold'))
 
         if self.litige_pts > 0:
             self.cv.create_text(18, 86, anchor='nw',
-                text=f'Litige: {self.litige_pts} pts in play',
+                text=self.t('litige_info', pts=self.litige_pts),
                 fill='#ffa0a0', font=('Helvetica', 13, 'italic'))
 
     def _draw_scores(self):
@@ -805,13 +1209,13 @@ class BeloteApp:
 
         # ── Header ──────────────────────────────────────────────────────────
         self.cv.create_text(px + SCORE_W // 2, py + 14,
-                            text=f'FIRST TO {WIN_TARGET}',
+                            text=self.t('first_to', n=WIN_TARGET),
                             fill=C_TEXT, font=('Helvetica', 13, 'bold'))
 
         # ── Team scores + progress bars ─────────────────────────────────────
         teams = [
-            ('You & North', self.scores[0], C_LIME),
-            ('East & West', self.scores[1], '#fca5a5'),
+            (self.team(0), self.scores[0], C_LIME),
+            (self.team(1), self.scores[1], '#fca5a5'),
         ]
         bar_w  = SCORE_W - 20
         bar_x  = px + 10
@@ -836,7 +1240,7 @@ class BeloteApp:
         n0 = max(WIN_TARGET - self.scores[0], 0)
         n1 = max(WIN_TARGET - self.scores[1], 0)
         self.cv.create_text(px + SCORE_W // 2, y + 5,
-                            text=f'Need  YN:{n0}  EW:{n1}',
+                            text=self.t('score_need', n0=n0, n1=n1),
                             fill=C_GRAY, font=('Helvetica', 11))
         y += 18
 
@@ -847,7 +1251,7 @@ class BeloteApp:
 
         # ── Round history header ─────────────────────────────────────────────
         self.cv.create_text(px + SCORE_W // 2, y + 7,
-                            text=f'Round History  (#{self.round_num})',
+                            text=self.t('round_hist', n=self.round_num),
                             fill=C_GRAY, font=('Helvetica', 12, 'bold'))
         y += 20
 
@@ -858,7 +1262,7 @@ class BeloteApp:
             'litige':  ('⚖', C_GOLD),
             'capot':   ('★', '#ff9f40'),
         }
-        TEAM_SHORT = ['Y+N', 'E+W']
+        TEAM_SHORT = [self.t('team0_short'), self.t('team1_short')]
         row_h      = 34
         ORDER_H    = 210  # height reserved at bottom for card order section
 
@@ -901,7 +1305,7 @@ class BeloteApp:
                             fill=C_GREEN, width=1)
         cx = px + SCORE_W // 2
         self.cv.create_text(cx, oy + 10,
-                            text='Order  (strongest → weakest)',
+                            text=self.t('order_hdr'),
                             fill=C_GRAY, font=('Helvetica', 11, 'italic'), anchor='center')
 
         # Two columns: left = Atout/TA, right = SA/Couleur
@@ -911,10 +1315,10 @@ class BeloteApp:
         header_y = oy + 26
 
         self.cv.create_text(col_l, header_y, anchor='nw',
-                            text='Atout / TA', fill='#aaddff',
+                            text=self.t('trump_col'), fill='#aaddff',
                             font=('Helvetica', 12, 'bold'))
         self.cv.create_text(col_r, header_y, anchor='nw',
-                            text='SA / Couleur', fill=C_DIM,
+                            text=self.t('plain_col'), fill=C_DIM,
                             font=('Helvetica', 12, 'bold'))
 
         trump_pts_map = {'J': 20, '9': 14, 'A': 11, '10': 10,
@@ -951,7 +1355,7 @@ class BeloteApp:
             (175,      CY - 90),
         ]
         colors = [C_LIME, '#fca5a5']
-        labels = ['You+N', 'E+W']
+        labels = [self.t('stack_yn'), self.t('stack_ew')]
 
         for team, (sx, sy) in enumerate(stack_pos):
             n = self.tricks_won[team]
@@ -1020,7 +1424,7 @@ class BeloteApp:
             cy = py + 22
             self._draw_mini_card(cx, cy, card)
             self.cv.create_text(cx + mw // 2, cy + mh + 9,
-                                text=PLAYER_NAMES[pidx][:3],
+                                text=self.pname(pidx)[:3],
                                 fill=C_GRAY, font=('Helvetica', 10))
 
     def _draw_bid_action_labels(self):
@@ -1035,7 +1439,7 @@ class BeloteApp:
         }
         for pidx, lbl in self.bid_actions.items():
             x, y = seats[pidx]
-            is_pass = lbl == 'Passe'
+            is_pass = lbl == self.t('bid_pass')
             bg   = '#1a3a28' if is_pass else '#1a2e4a'
             fg   = C_GRAY   if is_pass else C_GOLD
             pad  = 10
@@ -1054,7 +1458,7 @@ class BeloteApp:
         if self.revealed_card and self.phase == 'bidding':
             rx = CX - (CW+10)//2
             ry = CY - (CH+14)//2
-            self.cv.create_text(CX, ry-14, text='Carte retournée',
+            self.cv.create_text(CX, ry-14, text=self.t('revealed_card'),
                                 fill=C_GOLD, font=('Helvetica', 12, 'italic'))
             self._draw_card_face(rx, ry, self.revealed_card, large=True)
             self._draw_bid_action_labels()
@@ -1067,13 +1471,13 @@ class BeloteApp:
             threshold = _score_threshold(self.trump)
             rx = self.W - SCORE_W - 8
             self.cv.create_text(rx, 12, anchor='ne',
-                text=f'You+N: {self.trick_pts[0]}',
+                text=self.t('you_n_pts', pts=self.trick_pts[0]),
                 fill=C_LIME, font=('Helvetica', 13, 'bold'))
             self.cv.create_text(rx, 28, anchor='ne',
-                text=f'E+W: {self.trick_pts[1]}',
+                text=self.t('ew_pts', pts=self.trick_pts[1]),
                 fill='#fca5a5', font=('Helvetica', 13, 'bold'))
             self.cv.create_text(rx, 44, anchor='ne',
-                text=f'need {threshold} to win',
+                text=self.t('need_to_win', n=threshold),
                 fill=C_GRAY, font=('Helvetica', 11))
 
     def _draw_all_hands(self):
@@ -1106,7 +1510,7 @@ class BeloteApp:
             east_top_y = max(self.CY - (sp1 * (n1 - 1) + CH) // 2, SIDE_CARD_MIN_Y)
             east_cx    = self.W - SCORE_W - CW - 12 + CW // 2
             self.cv.create_text(east_cx, east_top_y - 16,
-                                text='East  (AI)', fill=C_TEXT,
+                                text=self.t('east_ai'), fill=C_TEXT,
                                 font=('Helvetica', 14, 'bold'), anchor='center')
         n3 = len(self.hands[3])
         if n3 > 0:
@@ -1115,7 +1519,7 @@ class BeloteApp:
             west_top_y = max(self.CY - (sp3 * (n3 - 1) + CH) // 2, SIDE_CARD_MIN_Y)
             west_cx    = 70 + CW // 2
             self.cv.create_text(west_cx, west_top_y - 16,
-                                text='West  (AI)', fill=C_TEXT,
+                                text=self.t('west_ai'), fill=C_TEXT,
                                 font=('Helvetica', 14, 'bold'), anchor='center')
 
     def _draw_ai_back(self, pidx: int, pos: str):
@@ -1227,7 +1631,7 @@ class BeloteApp:
 
         self._rrect(px, py, pw, ph, r=12, fill='#0a2218', outline=C_GREEN, width=2)
         self.cv.create_text(CX, py + 22,
-            text='Votre tour de donner  –  choisissez :',
+            text=self.t('deal_prompt'),
             fill=C_TEXT, font=('Helvetica', 14, 'bold'))
 
         btn_w, btn_h = 170, 44
@@ -1237,8 +1641,8 @@ class BeloteApp:
         by  = py + ph // 2 + 4
 
         for i, (label, tag, fill, ol) in enumerate([
-            ('Battre & Donner', 'deal_shuffle', '#1e3a5f', '#60a5fa'),
-            ('Couper & Donner', 'deal_cut',     '#1a3a28', C_GREEN),
+            (self.t('shuffle_deal'), 'deal_shuffle', '#1e3a5f', '#60a5fa'),
+            (self.t('cut_deal'),     'deal_cut',     '#1a3a28', C_GREEN),
         ]):
             bx = bx0 + i * (btn_w + gap)
             self._rrect(bx, by, btn_w, btn_h, r=8, fill=fill, outline=ol, width=2,
@@ -1265,8 +1669,7 @@ class BeloteApp:
         if self.bid_round == 1:
             suit = self.revealed_card.suit
             self.cv.create_text(px+pw//2, py+16,
-                text=f'Tour de prise  –  Round 1 of 2  '
-                     f'(accept {suit} as trump, or pass)',
+                text=self.t('bid_prompt_r1', suit=suit),
                 fill=C_TEXT, font=('Helvetica', 14, 'bold'))
 
             btn_w = min(160, pw // 2 - 30)
@@ -1282,7 +1685,7 @@ class BeloteApp:
             self._rrect(bx, btn_y, btn_w, btn_h, r=8,
                         fill=fill, outline=ol, width=2, tags=(tag,))
             self.cv.create_text(px + pw//4, btn_y + btn_h//2,
-                text=f'Take  {suit}', fill=C_TEXT,
+                text=self.t('take_btn', suit=suit), fill=C_TEXT,
                 font=('Helvetica', 17, 'bold'), tags=(tag,))
             self.cv.tag_bind(tag, '<Button-1>', lambda e: self._on_bid_take(None))
             self._bid_buttons[tag] = (bx, btn_y, bx + btn_w, btn_y + btn_h)
@@ -1296,18 +1699,19 @@ class BeloteApp:
             self._rrect(bx, btn_y, btn_w, btn_h, r=8,
                         fill=fill, outline=ol, width=2, tags=(tag,))
             self.cv.create_text(px + 3*pw//4, btn_y + btn_h//2,
-                text='Pass', fill=C_TEXT,
+                text=self.t('pass_btn'), fill=C_TEXT,
                 font=('Helvetica', 17, 'bold'), tags=(tag,))
             self.cv.tag_bind(tag, '<Button-1>', lambda e: self._on_bid_pass())
             self._bid_buttons[tag] = (bx, btn_y, bx + btn_w, btn_y + btn_h)
 
         else:
             revealed = self.revealed_card.suit
-            best_lbl = (f'  |  best bid: {_mode_label(self.best_bid_mode)}'
-                        f'  ({PLAYER_NAMES[self.best_bid_player]})'
+            best_lbl = (self.t('best_bid_lbl',
+                                mode=self.ml(self.best_bid_mode),
+                                player=self.pname(self.best_bid_player))
                         if self.best_bid_mode else '')
             self.cv.create_text(px+pw//2, py+16,
-                text=f'Tour de prise  –  Round 2  (not {revealed}){best_lbl}',
+                text=self.t('bid_prompt_r2', suit=revealed, best=best_lbl),
                 fill=C_TEXT, font=('Helvetica', 14, 'bold'))
 
             # All 6 bid options + Pass = 7 buttons
@@ -1363,7 +1767,7 @@ class BeloteApp:
             self._rrect(bx, btn_y, btn_w, btn_h, r=8,
                         fill=fill, outline=ol, width=2, tags=(tag,))
             self.cv.create_text(bx + btn_w//2, btn_y + btn_h//2,
-                text='Pass', fill=C_TEXT,
+                text=self.t('pass_btn'), fill=C_TEXT,
                 font=('Helvetica', 16, 'bold'), tags=(tag,))
             self.cv.tag_bind(tag, '<Button-1>', lambda e: self._on_bid_pass())
             self._bid_buttons[tag] = (bx, btn_y, bx + btn_w, btn_y + btn_h)
@@ -1372,7 +1776,7 @@ class BeloteApp:
             self._rrect(px + pw//2 - 90, py + 20, 180, 80, r=10,
                         fill='#1b4332', outline=C_LIME, width=3)
             self.cv.create_text(px + pw//2, py + 60,
-                text='Passed  ✓', fill=C_LIME,
+                text=self.t('passed_flash'), fill=C_LIME,
                 font=('Helvetica', 19, 'bold'))
 
     # ── Annonce overlay ────────────────────────────────────────────────────────
@@ -1385,12 +1789,12 @@ class BeloteApp:
         oy = (H - oh) // 2
         self._rrect(ox, oy, ow, oh, r=16, fill='#0a2218', outline=C_GOLD, width=3)
         self.cv.create_text(ox + ow // 2, oy + 22,
-                            text='Annonces', fill=C_GOLD,
+                            text=self.t('ann_header'), fill=C_GOLD,
                             font=('Helvetica', 18, 'bold'))
         y = oy + 48
         if not all_ann:
             self.cv.create_text(ox + ow // 2, y + 10,
-                                text='No annonces this round',
+                                text=self.t('ann_none'),
                                 fill=C_GRAY, font=('Helvetica', 14, 'italic'))
             y += 26
         else:
@@ -1398,21 +1802,20 @@ class BeloteApp:
                 parts = []
                 for a in sorted(anns, key=lambda x: -x['pts']):
                     if a['type'] == 'carre':
-                        parts.append(f"Carre {a['rank']}s ({a['pts']})")
+                        parts.append(self.t('ann_carre', rank=a['rank'], pts=a['pts']))
                     else:
-                        parts.append(f"Suite-{a['len']} {a['suit']} to {a['top']} ({a['pts']})")
-                self.cv.create_text(ox + 18, y, text=f'{PLAYER_NAMES[pidx]}:',
+                        parts.append(self.t('ann_suite', n=a['len'], suit=a['suit'], top=a['top'], pts=a['pts']))
+                self.cv.create_text(ox + 18, y, text=f'{self.pname(pidx)}:',
                                     fill=C_TEXT, font=('Helvetica', 13, 'bold'), anchor='nw')
                 self.cv.create_text(ox + 100, y, text='  '.join(parts),
                                     fill=C_GOLD, font=('Helvetica', 13), anchor='nw')
                 y += 26
         if self.annonce_winner_team >= 0:
-            teams = ['You & North', 'East & West']
             wt  = self.annonce_winner_team
-            msg = f'{teams[wt]} win annonces  +{self.annonce_pts[wt]} pts'
+            msg = self.t('ann_wins', team=self.team(wt), pts=self.annonce_pts[wt])
             clr = C_LIME if wt == 0 else '#fca5a5'
         else:
-            msg = 'Annonces void' if all_ann else ''
+            msg = self.t('ann_void') if all_ann else ''
             clr = C_GRAY
         if msg:
             self.cv.create_text(ox + ow // 2, y + 14, text=msg,
@@ -1422,7 +1825,7 @@ class BeloteApp:
         self._rrect(ox + ow // 2 - 70, by, 140, 32, r=8,
                     fill='#1b4332', outline=C_GOLD, width=2, tags=(tag,))
         self.cv.create_text(ox + ow // 2, by + 16,
-                            text='Play ▶', fill='white',
+                            text=self.t('play_btn'), fill='white',
                             font=('Helvetica', 15, 'bold'), tags=(tag,))
         self.cv.tag_bind(tag, '<Button-1>', lambda e: self._start_play())
 
@@ -1434,13 +1837,13 @@ class BeloteApp:
         result = ri.get('result', '')
 
         result_labels = {
-            'success': ('Contrat réussi  ✓', C_LIME),
-            'chute':   ('Chute  ✗  (contract failed)', '#ff6b6b'),
-            'litige':  ('Litige  ⚖  (81 – 81 tie)', C_GOLD),
-            'capot':   ('Capot  ★  (all 8 tricks!)', '#ff9f40'),
+            'success': (self.t('result_success'), C_LIME),
+            'chute':   (self.t('result_chute'),   '#ff6b6b'),
+            'litige':  (self.t('result_litige'),  C_GOLD),
+            'capot':   (self.t('result_capot'),   '#ff9f40'),
         }
         res_text, res_color = result_labels.get(result, ('', C_TEXT))
-        team_names = ['You & North', 'East & West']
+        team_names = [self.team(0), self.team(1)]
 
         ow, oh = min(480, W - 40), 400
         ox = (W - ow) // 2
@@ -1448,7 +1851,7 @@ class BeloteApp:
         self._rrect(ox, oy, ow, oh, r=16, fill='#0a2218', outline=C_GOLD, width=3)
 
         self.cv.create_text(ox+ow//2, oy+24,
-                            text='Round over', fill=C_GOLD,
+                            text=self.t('round_over_hdr'), fill=C_GOLD,
                             font=('Helvetica', 18, 'bold'))
         self.cv.create_text(ox+ow//2, oy+52,
                             text=res_text, fill=res_color,
@@ -1457,22 +1860,22 @@ class BeloteApp:
         trump_ink = C_RED if (self.trump in SUIT_RED and SUIT_RED[self.trump]) else C_TEXT
         threshold = _score_threshold(self.trump)
         lines = [
-            (f"Mode: {_mode_label(self.trump)}  |  Takers: {team_names[ct]}", trump_ink),
+            (self.t('mode_takers', mode=self.ml(self.trump), team=team_names[ct]), trump_ink),
             ('', C_TEXT),
-            (f"{team_names[ct]}  trick pts: {ri.get('taker_trick_pts', 0)}  (need {threshold})", C_TEXT),
-            (f"{team_names[at]}  trick pts: {ri.get('def_trick_pts', 0)}", C_TEXT),
+            (self.t('taker_pts_line', team=team_names[ct], pts=ri.get('taker_trick_pts', 0), n=threshold), C_TEXT),
+            (self.t('def_pts_line', team=team_names[at], pts=ri.get('def_trick_pts', 0)), C_TEXT),
         ]
         if ri.get('belote_team') is not None:
             bteam = team_names[ri['belote_team']]
-            lines.append((f"Belote: {bteam} +20 pts  (imprenable)", '#ff9f40'))
+            lines.append((self.t('belote_bonus', team=bteam), '#ff9f40'))
         ann_w = ri.get('ann_winner', -1)
         ann_p = ri.get('ann_pts', [0, 0])
         if ann_w >= 0:
-            lines.append((f"Annonces: {team_names[ann_w]} +{ann_p[ann_w]} pts", C_GOLD))
+            lines.append((self.t('ann_bonus', team=team_names[ann_w], pts=ann_p[ann_w]), C_GOLD))
         lines += [
             ('', C_TEXT),
-            (f"{team_names[ct]}  total: {ri.get('taker_pts', 0)}", C_TEXT),
-            (f"{team_names[at]}  total: {ri.get('def_pts', 0)}", C_TEXT),
+            (self.t('taker_total', team=team_names[ct], pts=ri.get('taker_pts', 0)), C_TEXT),
+            (self.t('def_total', team=team_names[at], pts=ri.get('def_pts', 0)), C_TEXT),
         ]
 
         for i, (ln, clr) in enumerate(lines):
@@ -1483,25 +1886,24 @@ class BeloteApp:
         self.cv.create_line(ox+30, sep_y, ox+ow-30, sep_y,
                             fill='#2d6a4f', width=1)
         self.cv.create_text(ox+ow//2, sep_y+14,
-                            text='Running scores:', fill=C_GRAY,
+                            text=self.t('running_scores'), fill=C_GRAY,
                             font=('Helvetica', 13))
         self.cv.create_text(ox+ow//2, sep_y+32,
-                            text=f'You & North: {self.scores[0]}   '
-                                 f'East & West: {self.scores[1]}',
+                            text=self.t('scores_line', s0=self.scores[0], s1=self.scores[1]),
                             fill=C_TEXT, font=('Helvetica', 14, 'bold'))
 
         tag = 'next_round'
         self._rrect(ox+ow//2-70, oy+oh-44, 140, 34, r=8,
                     fill='#991b1b', outline=C_GOLD, width=2, tags=(tag,))
         self.cv.create_text(ox+ow//2, oy+oh-27,
-                            text='Next round ▶', fill='white',
+                            text=self.t('next_round'), fill='white',
                             font=('Helvetica', 15, 'bold'), tags=(tag,))
         self.cv.tag_bind(tag, '<Button-1>', lambda e: self._new_round())
 
     def _draw_gameover_overlay(self):
         W, H = self.W, self.H
         winner = 0 if self.scores[0] > self.scores[1] else 1
-        team   = ['You & North', 'East & West'][winner]
+        team   = self.team(winner)
         color  = C_LIME if winner == 0 else '#fca5a5'
 
         ow, oh = min(440, W - 40), 280
@@ -1509,21 +1911,20 @@ class BeloteApp:
         oy = (H - oh) // 2
         self._rrect(ox, oy, ow, oh, r=16, fill='#0a2218', outline=C_GOLD, width=3)
         self.cv.create_text(ox+ow//2, oy+36,
-                            text='Game Over', fill=C_GOLD,
+                            text=self.t('game_over'), fill=C_GOLD,
                             font=('Helvetica', 21, 'bold'))
         self.cv.create_text(ox+ow//2, oy+80,
-                            text=f'  {team} win!', fill=color,
+                            text=self.t('winner_line', team=team), fill=color,
                             font=('Helvetica', 18, 'bold'))
         self.cv.create_text(ox+ow//2, oy+120,
-                            text=f'Final: You & North {self.scores[0]}   '
-                                 f'East & West {self.scores[1]}',
+                            text=self.t('final_scores', s0=self.scores[0], s1=self.scores[1]),
                             fill=C_TEXT, font=('Helvetica', 15))
 
         tag = 'new_game_btn'
         self._rrect(ox+ow//2-80, oy+oh-54, 160, 38, r=8,
                     fill='#991b1b', outline=C_GOLD, width=2, tags=(tag,))
         self.cv.create_text(ox+ow//2, oy+oh-35,
-                            text='New Game', fill='white',
+                            text=self.t('new_game_btn'), fill='white',
                             font=('Helvetica', 16, 'bold'), tags=(tag,))
         self.cv.tag_bind(tag, '<Button-1>', lambda e: self._new_game())
 
@@ -1576,7 +1977,7 @@ class BeloteApp:
         if self.dealer == 0:
             # Human player deals — let them choose to shuffle or just cut
             self.phase = 'dealing'
-            self.status.config(text='Your turn to deal')
+            self.status.config(text=self.t('your_deal'))
             self._redraw()
         else:
             # AI dealer: just cut and deal automatically
@@ -1601,7 +2002,7 @@ class BeloteApp:
         self.current        = start
         self.phase          = 'bidding'
 
-        self.status.config(text='Bidding phase – round 1')
+        self.status.config(text=self.t('bid_r1'))
         self._redraw()
         if self.current != 0:
             self.root.after(700, self._ai_bid_step)
@@ -1653,11 +2054,11 @@ class BeloteApp:
         trump = suit if suit else self.revealed_card.suit
         self.trump           = trump
         self.contract_player = pidx
-        mode_label = _mode_label(trump)
-        self.bid_actions[pidx] = f'Prend  {mode_label}'
+        mode_label = self.ml(trump)
+        self.bid_actions[pidx] = self.t('bid_takes', mode=mode_label)
         self.status.config(
-            text=f'{PLAYER_NAMES[pidx]} takes – {mode_label}  '
-                 f'({"round 1" if self.bid_round == 1 else "round 2"})')
+            text=self.t('p_takes', player=self.pname(pidx), mode=mode_label,
+                        rnd=self.t('rnd1' if self.bid_round == 1 else 'rnd2')))
         self._deal_remaining(pidx)
         for h in self.hands:
             _sort_hand(h, self.trump)
@@ -1672,10 +2073,10 @@ class BeloteApp:
             self.best_bid_rank   = rank
             self.best_bid_player = pidx
             self.best_bid_mode   = mode
-        self.bid_actions[pidx] = _mode_label(mode)
+        self.bid_actions[pidx] = self.ml(mode)
         self.status.config(
-            text=f'{PLAYER_NAMES[pidx]} bids {_mode_label(mode)}'
-                 f'  (best so far: {_mode_label(self.best_bid_mode)})')
+            text=self.t('p_bids', player=self.pname(pidx), mode=self.ml(mode),
+                        best=self.ml(self.best_bid_mode)))
         self._bid_count += 1
         self._redraw()
         if self._bid_count == 4:
@@ -1699,12 +2100,12 @@ class BeloteApp:
 
     def _show_announcing(self):
         self.phase = 'announcing'
-        self.status.config(text='Annonces – click anywhere to play')
+        self.status.config(text=self.t('announcing'))
         self._redraw()
 
     def _apply_pass(self, pidx: int):
-        self.bid_actions[pidx] = 'Passe'
-        self.status.config(text=f'{PLAYER_NAMES[pidx]} passes')
+        self.bid_actions[pidx] = self.t('bid_pass')
+        self.status.config(text=self.t('p_passes', player=self.pname(pidx)))
 
         if self.bid_round == 1:
             self._bid_count += 1
@@ -1715,7 +2116,7 @@ class BeloteApp:
                 self.best_bid_player = -1
                 self.best_bid_mode   = None
                 self.current         = (self.dealer + 1) % 4
-                self.status.config(text='Bidding phase – round 2')
+                self.status.config(text=self.t('bid_r2'))
                 self._redraw()
                 if self.current != 0:
                     self.root.after(700, self._ai_bid_step)
@@ -1734,7 +2135,7 @@ class BeloteApp:
                         self.best_bid_player, self.best_bid_mode))
                 else:
                     self.dealer = (self.dealer + 3) % 4
-                    self.status.config(text='No takers – redealing…')
+                    self.status.config(text=self.t('no_takers'))
                     self._redraw()
                     self.root.after(1200, self._new_round)
             else:
@@ -1762,7 +2163,7 @@ class BeloteApp:
         self.phase   = 'playing'
         self.trick   = []
         self.current = (self.dealer + 3) % 4
-        self.status.config(text=f'Playing  –  {_mode_label(self.trump)}')
+        self.status.config(text=self.t('playing', mode=self.ml(self.trump)))
         self._redraw()
         if self.current != 0:
             self.root.after(800, self._ai_play_step)
@@ -1796,7 +2197,7 @@ class BeloteApp:
         self.belote_played += 1
         self.belote_pts[pidx % 2] = 20
         word = 'Rebelote!' if self.belote_played >= 2 else 'Belote!'
-        self.status.config(text=f'{word}  ({PLAYER_NAMES[pidx]})')
+        self.status.config(text=self.t('belote_status', word=word, player=self.pname(pidx)))
 
     def _finish_trick(self):
         winner = who_wins(self.trick, self.trump)
@@ -1817,12 +2218,12 @@ class BeloteApp:
         if is_last:
             self.current = winner
             self.phase   = 'last_trick'
-            self.status.config(text='Click anywhere to continue ▶')
+            self.status.config(text=self.t('click_cont'))
             self._redraw()
         else:
             self.trick   = []
             self.current = winner
-            self.status.config(text=f'{PLAYER_NAMES[winner]} wins the trick')
+            self.status.config(text=self.t('wins_trick', player=self.pname(winner)))
             self._redraw()
             if self.current != 0:
                 self.root.after(750, self._ai_play_step)
@@ -1897,7 +2298,7 @@ class BeloteApp:
         })
 
         self.dealer = (self.dealer + 3) % 4
-        self.status.config(text='Round over – see results')
+        self.status.config(text=self.t('round_over_st'))
         self.phase = 'gameover' if max(self.scores) >= WIN_TARGET else 'scoring'
         self._redraw()
 
