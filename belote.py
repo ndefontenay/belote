@@ -476,6 +476,7 @@ class BeloteApp:
         self.selected:        Optional[Card]   = None
         self.phase:           str              = 'idle'
         self.round_info:      dict             = {}
+        self._deck:           List[Card]       = []
 
         self._build_ui()
         self.root.after(400, self._new_round)
@@ -573,6 +574,8 @@ class BeloteApp:
         self._draw_contract_chip()
         if self.show_hints.get() and self.phase == 'playing' and self.trump:
             self._draw_suggestions()
+        if self.phase == 'dealing':
+            self._draw_dealing_panel()
         if self.phase == 'bidding':
             self._draw_bid_panel()
         if self.phase == 'announcing':
@@ -1065,6 +1068,37 @@ class BeloteApp:
             return hover_fill, hover_ol
         return normal_fill, normal_ol
 
+    def _draw_dealing_panel(self):
+        W, H, CX = self.W, self.H, self.CX
+        hand_y = H - CH - 18
+        ph, pw = 120, 420
+        px = CX - pw // 2
+        py = hand_y - ph - 12
+
+        self._rrect(px, py, pw, ph, r=12, fill='#0a2218', outline=C_GREEN, width=2)
+        self.cv.create_text(CX, py + 22,
+            text='Votre tour de donner  –  choisissez :',
+            fill=C_TEXT, font=('Helvetica', 14, 'bold'))
+
+        btn_w, btn_h = 170, 44
+        gap = 20
+        total = btn_w * 2 + gap
+        bx0 = CX - total // 2
+        by  = py + ph // 2 + 4
+
+        for i, (label, tag, fill, ol) in enumerate([
+            ('Battre & Donner', 'deal_shuffle', '#1e3a5f', '#60a5fa'),
+            ('Couper & Donner', 'deal_cut',     '#1a3a28', C_GREEN),
+        ]):
+            bx = bx0 + i * (btn_w + gap)
+            self._rrect(bx, by, btn_w, btn_h, r=8, fill=fill, outline=ol, width=2,
+                        tags=(tag,))
+            self.cv.create_text(bx + btn_w // 2, by + btn_h // 2,
+                text=label, fill='white', font=('Helvetica', 13, 'bold'),
+                tags=(tag,))
+            self.cv.tag_bind(tag, '<Button-1>',
+                lambda e, s=(tag == 'deal_shuffle'): self._do_deal(shuffled=s))
+
     def _draw_bid_panel(self):
         W, H, CX = self.W, self.H, self.CX
         hand_y = H - CH - 18
@@ -1350,43 +1384,72 @@ class BeloteApp:
         self.round_num     = 0
         self.round_history = []
         self.dealer        = 0
+        self._deck         = fresh_deck()
+        random.shuffle(self._deck)
         self._new_round()
 
     def _new_round(self):
-        deck  = fresh_deck()
-        random.shuffle(deck)
+        # Collect cards from previous round into the persistent deck
+        if self.played_cards:
+            self._deck = list(self.played_cards)
+        if not self._deck:
+            self._deck = fresh_deck()
+            random.shuffle(self._deck)
+
+        # Reset round state (hands dealt later in _do_deal)
+        self.trump               = None
+        self.contract_player     = -1
+        self.trick               = []
+        self.played_cards        = []
+        self.annonces            = [[], [], [], []]
+        self.annonce_winner_team = -1
+        self.annonce_pts         = [0, 0]
+        self.last_trick_taken    = [None, None]
+        self.show_last_trick     = [False, False]
+        self.trick_pts           = [0, 0]
+        self.tricks_won          = [0, 0]
+        self.belote_player       = -1
+        self.belote_played       = 0
+        self.belote_pts          = [0, 0]
+        self.selected            = None
+        self.bid_round           = 1
+        self._bid_count          = 0
+        self.best_bid_rank       = 0
+        self.best_bid_player     = -1
+        self.best_bid_mode       = None
+        self.bid_actions         = {}
+        self.round_info          = {}
+        self.hands               = [[], [], [], []]
+        self.revealed_card       = None
+        self.remaining_deck      = []
+
+        if self.dealer == 0:
+            # Human player deals — let them choose to shuffle or just cut
+            self.phase = 'dealing'
+            self.status.config(text='Your turn to deal')
+            self._redraw()
+        else:
+            # AI dealer: just cut and deal automatically
+            self.root.after(600, lambda: self._do_deal(shuffled=False))
+
+    def _do_deal(self, shuffled: bool = False):
+        """Cut (and optionally shuffle) the deck, then deal hands and start bidding."""
+        if shuffled:
+            random.shuffle(self._deck)
+        # Apply a random cut
+        n = len(self._deck)
+        cut = random.randint(max(1, n // 4), min(n - 1, 3 * n // 4))
+        deck = self._deck[cut:] + self._deck[:cut]
+
         start = (self.dealer + 1) % 4
         for i in range(4):
             pidx = (start + i) % 4
-            self.hands[pidx] = deck[i*5 : i*5+5]
+            self.hands[pidx] = list(deck[i*5 : i*5+5])
 
         self.revealed_card  = deck[20]
-        self.remaining_deck = deck[21:]
-
-        self.trump              = None
-        self.contract_player    = -1
-        self.trick              = []
-        self.played_cards       = []
-        self.annonces           = [[], [], [], []]
-        self.annonce_winner_team = -1
-        self.annonce_pts        = [0, 0]
-        self.last_trick_taken   = [None, None]
-        self.show_last_trick    = [False, False]
-        self.trick_pts          = [0, 0]
-        self.tricks_won      = [0, 0]
-        self.belote_player   = -1
-        self.belote_played   = 0
-        self.belote_pts      = [0, 0]
-        self.selected        = None
-        self.bid_round       = 1
-        self._bid_count      = 0
-        self.best_bid_rank   = 0
-        self.best_bid_player = -1
-        self.best_bid_mode   = None
-        self.bid_actions     = {}
-        self.round_info      = {}
-        self.current         = start
-        self.phase           = 'bidding'
+        self.remaining_deck = list(deck[21:])
+        self.current        = start
+        self.phase          = 'bidding'
 
         self.status.config(text='Bidding phase – round 1')
         self._redraw()
