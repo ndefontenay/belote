@@ -768,6 +768,8 @@ class BeloteApp:
         self.show_hints      = tk.BooleanVar(value=True)
         self.card_back_style = tk.IntVar(value=0)
         self.lang            = tk.StringVar(value='en')
+        self._fw_particles: list = []
+        self._fw_active:    bool = False
 
         # Live layout (updated on every redraw from canvas size)
         self.W  = DEFAULT_W
@@ -1947,6 +1949,11 @@ class BeloteApp:
             self._deck = fresh_deck()
             random.shuffle(self._deck)
 
+        # Stop any running fireworks
+        self._fw_active    = False
+        self._fw_particles = []
+        self.cv.delete('fw')
+
         # Reset round state (hands dealt later in _do_deal)
         self.trump               = None
         self.contract_player     = -1
@@ -2245,8 +2252,10 @@ class BeloteApp:
                        if self.belote_player >= 0 and self.belote_played > 0
                        else None)
 
+        capot_winner = -1
         if all_to_ct or all_to_at:
             w, l   = (ct, at) if all_to_ct else (at, ct)
+            capot_winner = w
             result = 'capot'
             # Winner gets all trick pts + belote (both sides) + their annonces; loser keeps belote + their annonces
             self.scores[w] += (taker_trick + def_trick
@@ -2301,6 +2310,99 @@ class BeloteApp:
         self.status.config(text=self.t('round_over_st'))
         self.phase = 'gameover' if max(self.scores) >= WIN_TARGET else 'scoring'
         self._redraw()
+        if capot_winner == 0:
+            self.root.after(500, self._launch_fireworks)
+
+    # ── Fireworks ──────────────────────────────────────────────────────────────
+    def _launch_fireworks(self):
+        self._fw_particles = []
+        self._fw_active    = True
+        colors = ['#ffe44d','#ff6b6b','#60a5fa','#4ade80',
+                  '#f9a8d4','#c084fc','#fb923c','#f472b6','#34d399','#ffffff']
+
+        def fire(xfrac):
+            W, H = self.W, self.H
+            self._fw_particles.append({
+                'type':  'rocket',
+                'x':     W * xfrac + random.uniform(-30, 30),
+                'y':     H - 20,
+                'vx':    random.uniform(-2.5, 2.5),
+                'vy':    random.uniform(-19, -13),
+                'color': random.choice(colors),
+                'life':  random.randint(28, 44),
+            })
+
+        for i, xf in enumerate([0.10, 0.25, 0.38, 0.50, 0.62, 0.75, 0.90]):
+            self.root.after(i * 280, lambda x=xf: fire(x))
+        self.root.after(3500, lambda: setattr(self, '_fw_active', False))
+        self._tick_fireworks()
+
+    def _tick_fireworks(self):
+        if not self._fw_particles and not self._fw_active:
+            self.cv.delete('fw')
+            return
+        self.cv.delete('fw')
+        keep = []
+        for p in self._fw_particles:
+            if p['type'] == 'rocket':
+                p['x']  += p['vx']
+                p['y']  += p['vy']
+                p['vy'] += 0.45
+                p['life'] -= 1
+                # Head
+                self.cv.create_oval(p['x']-6, p['y']-6, p['x']+6, p['y']+6,
+                                    fill=p['color'], outline='', tags='fw')
+                # Bright core
+                self.cv.create_oval(p['x']-2, p['y']-2, p['x']+2, p['y']+2,
+                                    fill='white', outline='', tags='fw')
+                # Trail
+                self.cv.create_oval(p['x']-2, p['y']+4, p['x']+2, p['y']+12,
+                                    fill='#ffcc44', outline='', tags='fw')
+                if p['life'] > 0 and p['vy'] < 0:
+                    keep.append(p)
+                else:
+                    # Explode into sparks
+                    for _ in range(50):
+                        ang  = random.uniform(0, 2 * math.pi)
+                        spd  = random.uniform(3, 12)
+                        keep.append({
+                            'type':     'spark',
+                            'x':        p['x'], 'y': p['y'],
+                            'vx':       math.cos(ang) * spd,
+                            'vy':       math.sin(ang) * spd - 2,
+                            'color':    p['color'],
+                            'life':     random.randint(30, 55),
+                            'max_life': 55,
+                            'r':        random.uniform(3, 6),
+                        })
+                    # Gold/white glitter sparks
+                    for _ in range(25):
+                        ang  = random.uniform(0, 2 * math.pi)
+                        spd  = random.uniform(1.5, 8)
+                        keep.append({
+                            'type':     'spark',
+                            'x':        p['x'], 'y': p['y'],
+                            'vx':       math.cos(ang) * spd,
+                            'vy':       math.sin(ang) * spd,
+                            'color':    random.choice(['#ffffff', '#ffe44d']),
+                            'life':     random.randint(18, 35),
+                            'max_life': 35,
+                            'r':        random.uniform(1.5, 3.5),
+                        })
+            else:  # spark
+                p['x']  += p['vx']
+                p['y']  += p['vy']
+                p['vy'] += 0.22
+                p['vx'] *= 0.97
+                p['life'] -= 1
+                if p['life'] > 0:
+                    ratio = p['life'] / p['max_life']
+                    r = max(1.0, p['r'] * ratio)
+                    self.cv.create_oval(p['x']-r, p['y']-r, p['x']+r, p['y']+r,
+                                        fill=p['color'], outline='', tags='fw')
+                    keep.append(p)
+        self._fw_particles = keep
+        self.root.after(25, self._tick_fireworks)
 
     # ── Click handling ─────────────────────────────────────────────────────────
     def _on_canvas_click(self, event):
