@@ -182,8 +182,11 @@ def ai_play(hand: List[Card], trick: List[Tuple[int, Card]],
         # Priority 3: we took contract → lead trump aggressively
         if contract_player == me and ts:
             return max(ts, key=lambda c: c.power(trump, trump))
-        # Default: highest point value
-        return max(plays, key=lambda c: c.pts(trump))
+        # Default: highest point value — but avoid leading trump 9 while trump J is still live
+        trump_j_out = any(c.suit == trump and c.rank == 'J' for c in played)
+        safe = [c for c in plays
+                if not (c.suit == trump and c.rank == '9' and not trump_j_out)]
+        return max((safe or plays), key=lambda c: c.pts(trump))
 
     led   = trick[0][1].suit
     p_win = who_wins(trick, trump) == partner

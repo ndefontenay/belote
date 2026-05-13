@@ -37,7 +37,7 @@ A card is *master* when every higher-ranked card of the same suit has already be
 | 1 | AI has a **master card** | Lead it — guaranteed win regardless of what opponents hold. Prefer the one with the highest point value. |
 | 2 | **Partner took the contract** | Lead trump — helps drain opponent trump cards so the contract holder can win later tricks. |
 | 3 | **AI itself took the contract** | Lead trump aggressively to pull out opposing trumps. |
-| 4 | Default | Lead the highest point-value card available. |
+| 4 | Default | Lead the highest point-value card available — **except**: do not lead the trump 9 while the trump Jack has not yet been played (it would be captured). Fall back to leading the 9 only if it is the only legal play. |
 
 ### Following a trick (cards already on table)
 
