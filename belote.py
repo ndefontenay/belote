@@ -6,6 +6,7 @@ Teams: South+North vs East+West  |  1 human (South) + 3 AI
 """
 import tkinter as tk
 import random
+import math
 from typing import List, Tuple, Optional
 
 # ── Constants ──────────────────────────────────────────────────────────────────
@@ -434,7 +435,8 @@ class BeloteApp:
         root.minsize(960, 680)
         root.configure(bg=BG_DARK)
 
-        self.show_hints = tk.BooleanVar(value=True)
+        self.show_hints      = tk.BooleanVar(value=True)
+        self.card_back_style = tk.IntVar(value=0)
 
         # Live layout (updated on every redraw from canvas size)
         self.W  = DEFAULT_W
@@ -531,6 +533,15 @@ class BeloteApp:
                   font=('Helvetica', 14, 'bold'), padx=12, pady=4,
                   cursor='hand2').pack(side='right', padx=18, pady=8)
 
+        tk.Label(bar, text='Card back:', bg=BG_DARK, fg=C_TEXT,
+                 font=('Helvetica', 13)).pack(side='right', padx=(12, 4))
+        for i, label in enumerate(['🌸 Blossom', '🌊 Ocean']):
+            tk.Radiobutton(bar, text=label, variable=self.card_back_style, value=i,
+                           command=self._redraw, bg=BG_DARK, fg=C_TEXT,
+                           selectcolor='#0a2218', activebackground=BG_DARK,
+                           activeforeground=C_TEXT,
+                           font=('Helvetica', 13)).pack(side='right', padx=6, pady=8)
+
     # ── Drawing primitives ─────────────────────────────────────────────────────
     def _rrect(self, x, y, w, h, r=8, **kw):
         pts = [x+r,y, x+w-r,y, x+w,y+r, x+w,y+h-r,
@@ -538,10 +549,79 @@ class BeloteApp:
         self.cv.create_polygon(pts, smooth=True, **kw)
 
     def _draw_card_back(self, x, y, tags=()):
-        self._rrect(x, y, CW, CH, fill=C_BACK, outline='#3a7bd5', width=1, tags=tags)
-        for i in range(8, CW-8, 10):
-            self.cv.create_line(x+i, y+5, x+i, y+CH-5,
-                                fill='#1a5090', width=1, tags=tags)
+        [self._draw_back_blossom,
+         self._draw_back_ocean][self.card_back_style.get()](x, y, tags)
+
+    def _draw_back_blossom(self, x, y, tags=()):
+        self._rrect(x, y, CW, CH, fill='#120818', outline='#c084a0', width=2, tags=tags)
+        # Branches
+        branch_color = '#6b3a1f'
+        self.cv.create_line(x+8, y+CH, x+20,y+90, x+35,y+70, x+55,y+45, x+68,y+22,
+                            fill=branch_color, width=3, smooth=True, tags=tags)
+        self.cv.create_line(x+55,y+45, x+40,y+38, fill=branch_color, width=2, smooth=True, tags=tags)
+        self.cv.create_line(x+35,y+70, x+22,y+58, fill=branch_color, width=2, tags=tags)
+        self.cv.create_line(x+68,y+22, x+80,y+30, fill=branch_color, width=2, tags=tags)
+        self.cv.create_line(x+80,y+CH, x+75,y+85, x+65,y+65, x+75,y+50,
+                            fill=branch_color, width=2, smooth=True, tags=tags)
+
+        def blossom(bx, by, r=6, col='#f4a0c0'):
+            offsets = [(0,-r),(r*0.95,-r*0.31),(r*0.59,r*0.81),(-r*0.59,r*0.81),(-r*0.95,-r*0.31)]
+            pr = r * 0.55
+            for dx, dy in offsets:
+                self.cv.create_oval(bx+dx-pr, by+dy-pr, bx+dx+pr, by+dy+pr,
+                                    fill=col, outline='', tags=tags)
+            self.cv.create_oval(bx-2, by-2, bx+2, by+2, fill='#ffe4b5', outline='', tags=tags)
+
+        blossom(x+68, y+22)
+        blossom(x+55, y+38, r=5)
+        blossom(x+40, y+38, r=5)
+        blossom(x+80, y+30, r=5)
+        blossom(x+22, y+58, r=5)
+        blossom(x+35, y+62, r=5, col='#e890b0')
+        blossom(x+75, y+50, r=4, col='#f9c0d4')
+        blossom(x+65, y+65, r=4)
+        blossom(x+50, y+75, r=4, col='#e890b0')
+        # Falling petals
+        for bx, by in [(x+15,y+35),(x+72,y+75),(x+30,y+100),(x+58,y+95),(x+10,y+70)]:
+            self.cv.create_oval(bx-3, by-2, bx+3, by+2, fill='#f4a0c0', outline='', tags=tags)
+
+    def _draw_back_ocean(self, x, y, tags=()):
+        self._rrect(x, y, CW, CH, fill='#071e40', outline='#4a90d9', width=2, tags=tags)
+        # Sky gradient (lighter at horizon)
+        self.cv.create_rectangle(x, y, x+CW, y+45, fill='#0a2a52', outline='', tags=tags)
+        # Moon / sun disk
+        self.cv.create_oval(x+36, y+6, x+52, y+22, fill='#f5f0c8', outline='#e8d87a', width=1, tags=tags)
+        # Mt Fuji silhouette
+        self.cv.create_polygon(
+            [x+20,y+44, x+44,y+10, x+68,y+44],
+            fill='#1a3a5c', outline='', tags=tags)
+        self.cv.create_polygon(
+            [x+38,y+10, x+44,y+10, x+50,y+18, x+44,y+22, x+38,y+18],
+            fill='#d8eaf8', outline='', tags=tags)
+
+        def wave(wy, amplitude, color, foam_color, tags):
+            pts = [x, y+wy+amplitude]
+            step = 11
+            for i in range(0, CW+step, step):
+                mid_x = x + i + step//2
+                pts += [mid_x, y+wy - amplitude, x + i + step, y+wy + amplitude]
+            pts += [x+CW, y+CH, x, y+CH]
+            self.cv.create_polygon(pts, fill=color, outline='', smooth=False, tags=tags)
+            # Foam tips
+            for i in range(0, CW, step):
+                fx = x + i + step//2
+                fy = y + wy - amplitude
+                self.cv.create_oval(fx-4, fy-3, fx+4, fy+4,
+                                    fill=foam_color, outline='', tags=tags)
+                # Claw lines
+                for dx in (-3, 0, 3):
+                    self.cv.create_line(fx+dx, fy+2, fx+dx, fy+7,
+                                        fill=foam_color, width=1, tags=tags)
+
+        wave(54,  7,  '#0e3d7a', '#c8dff5', tags)
+        wave(70,  6,  '#0a3068', '#d0e8fa', tags)
+        wave(86,  5,  '#082655', '#daeeff', tags)
+        wave(100, 4,  '#061c40', '#e0f0ff', tags)
 
     def _draw_card_face(self, x, y, card: Card, *,
                         highlight=False, dim=False, large=False, tags=()):
@@ -1803,6 +1883,10 @@ class BeloteApp:
 # ── Entry point ────────────────────────────────────────────────────────────────
 def main():
     root = tk.Tk()
+    root.update_idletasks()
+    sw = root.winfo_screenwidth()
+    sh = root.winfo_screenheight()
+    root.geometry(f"{sw}x{sh}+0+0")
     BeloteApp(root)
     root.mainloop()
 
