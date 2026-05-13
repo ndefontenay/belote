@@ -19,6 +19,10 @@ PLAIN_ORDER = ['A', '10', 'K', 'Q', 'J', '9', '8', '7']
 TRUMP_PTS = {'J': 20, '9': 14, 'A': 11, '10': 10, 'K': 4, 'Q': 3, '8': 0, '7': 0}
 PLAIN_PTS = {'A': 11, '10': 10, 'K': 4, 'Q': 3, 'J': 2, '9': 0, '8': 0, '7': 0}
 
+# Bidding hierarchy for round 2 (lowest → highest)
+BID_MODES = ['♣', '♦', '♠', '♥', 'SA', 'TA']
+BID_RANK  = {m: i for i, m in enumerate(BID_MODES)}
+
 WIN_TARGET = 501
 SCORE_W    = 215   # width of the right-side score/history panel
 
@@ -53,9 +57,21 @@ class Card:
         self.rank = rank
 
     def pts(self, trump: str) -> int:
+        if trump == 'SA':
+            return PLAIN_PTS[self.rank]
+        if trump == 'TA':
+            return TRUMP_PTS[self.rank]
         return TRUMP_PTS[self.rank] if self.suit == trump else PLAIN_PTS[self.rank]
 
     def power(self, trump: str, led: str) -> int:
+        if trump == 'SA':
+            if self.suit == led:
+                return 100 + len(PLAIN_ORDER) - PLAIN_ORDER.index(self.rank)
+            return 0
+        if trump == 'TA':
+            if self.suit == led:
+                return 200 + len(TRUMP_ORDER) - TRUMP_ORDER.index(self.rank)
+            return 0
         if self.suit == trump:
             return 200 + len(TRUMP_ORDER) - TRUMP_ORDER.index(self.rank)
         if self.suit == led:
@@ -90,6 +106,17 @@ def legal_plays(hand: List[Card], trick: List[Tuple[int, Card]],
 
     led    = trick[0][1].suit
     follow = [c for c in hand if c.suit == led]
+
+    # SA/TA: no trump suit, just follow led suit (no overtrumping requirement)
+    if trump in ('SA', 'TA'):
+        if follow:
+            if trump == 'TA':
+                best = max(c.power(trump, led) for _, c in trick)
+                hi   = [c for c in follow if c.power(trump, led) > best]
+                return hi if hi else follow
+            return follow
+        return list(hand)
+
     trumps = [c for c in hand if c.suit == trump]
     p_win  = who_wins(trick, trump) == (me + 2) % 4
 
@@ -119,8 +146,13 @@ def _hand_score(hand: List[Card], trump: str) -> float:
 
 def _is_master(card: Card, trump: str, played: set) -> bool:
     """True if no unplayed card can beat this card in its suit."""
-    order = TRUMP_ORDER if card.suit == trump else PLAIN_ORDER
-    idx   = order.index(card.rank)
+    if trump == 'TA':
+        order = TRUMP_ORDER
+    elif card.suit == trump:
+        order = TRUMP_ORDER
+    else:
+        order = PLAIN_ORDER
+    idx = order.index(card.rank)
     return all(Card(card.suit, r) in played for r in order[:idx])
 
 
@@ -141,11 +173,18 @@ def ai_bid_round1(hand: List[Card], revealed_card: Card) -> bool:
     return _hand_score(hand, suit) >= 58
 
 
-def ai_bid_round2(hand: List[Card], revealed_suit: str) -> Optional[str]:
-    """See AI_RULES.md – Bidding Round 2."""
-    best_suit, best_score = None, 40
+def ai_bid_round2(hand: List[Card], revealed_suit: str,
+                  min_bid_rank: int = 0) -> Optional[str]:
+    """Bidding Round 2 – returns best bid mode or None to pass.
+
+    min_bid_rank: only consider bids with BID_RANK > this value (competitive bidding).
+    """
+    best_mode, best_score = None, 40
+
     for s in SUITS:
         if s == revealed_suit:
+            continue
+        if BID_RANK[s] <= min_bid_rank:
             continue
         sc = _hand_score(hand, s)
         if any(c.suit == s and c.rank == 'J' for c in hand):
@@ -154,8 +193,27 @@ def ai_bid_round2(hand: List[Card], revealed_suit: str) -> Optional[str]:
         if any(c.suit == s and c.rank == '9' for c in hand) and trump_count >= 2:
             sc += 10
         if sc > best_score:
-            best_score, best_suit = sc, s
-    return best_suit
+            best_score, best_mode = sc, s
+
+    # Consider SA: good when hand has many Aces and 10s
+    if BID_RANK['SA'] > min_bid_rank:
+        sa_sc = sum(PLAIN_PTS[c.rank] for c in hand)
+        aces  = sum(1 for c in hand if c.rank == 'A')
+        tens  = sum(1 for c in hand if c.rank == '10')
+        if (aces >= 3 or tens >= 3 or (aces >= 2 and tens >= 2)) and sa_sc >= 55:
+            if sa_sc > best_score:
+                best_score, best_mode = sa_sc, 'SA'
+
+    # Consider TA: good when hand is heavy in Jacks and 9s
+    if BID_RANK['TA'] > min_bid_rank:
+        jacks = sum(1 for c in hand if c.rank == 'J')
+        nines = sum(1 for c in hand if c.rank == '9')
+        ta_sc = jacks * 25 + nines * 15 + sum(TRUMP_PTS[c.rank] for c in hand) * 0.3
+        if (jacks >= 3 or nines >= 3 or (jacks >= 2 and nines >= 2)) and ta_sc >= 55:
+            if ta_sc > best_score:
+                best_score, best_mode = ta_sc, 'TA'
+
+    return best_mode
 
 
 def ai_play(hand: List[Card], trick: List[Tuple[int, Card]],
@@ -257,6 +315,33 @@ def ann_winner_team(all_ann: List[List[dict]], trump: str) -> int:
     return -1
 
 
+# ── Mode helpers ───────────────────────────────────────────────────────────────
+def _mode_label(trump: Optional[str]) -> str:
+    if trump == 'SA':
+        return 'Sans Atout'
+    if trump == 'TA':
+        return 'Tout Atout'
+    return f'Atout {trump}' if trump else '?'
+
+
+def _score_threshold(trump: Optional[str]) -> int:
+    """Minimum trick points for the taking team to succeed."""
+    if trump == 'SA':
+        return 66   # >half of 130 total (120 card pts + 10 der)
+    if trump == 'TA':
+        return 130  # >half of 258 total (248 card pts + 10 der)
+    return 82       # standard: >half of 162
+
+
+def _full_trick_pts(trump: Optional[str]) -> int:
+    """Total card trick points awarded to defenders on chute (no 10-de-der)."""
+    if trump == 'SA':
+        return 120
+    if trump == 'TA':
+        return 248
+    return 162
+
+
 # ── Application ────────────────────────────────────────────────────────────────
 class BeloteApp:
     def __init__(self, root: tk.Tk):
@@ -283,6 +368,11 @@ class BeloteApp:
         self._bid_hover:       Optional[str]  = None
         self._bid_buttons:     dict           = {}
         self._bid_pass_flash:  bool           = False
+
+        # Round 2 competitive bidding state
+        self.best_bid_rank:   int           = 0
+        self.best_bid_player: int           = -1
+        self.best_bid_mode:   Optional[str] = None
 
         # Round state
         self.hands:           List[List[Card]] = [[], [], [], []]
@@ -441,11 +531,11 @@ class BeloteApp:
                                 fill=C_GOLD, font=('Helvetica', 14))
 
         if self.trump:
-            ink  = C_RED if SUIT_RED[self.trump] else C_TEXT
+            ink  = C_RED if (self.trump in SUIT_RED and SUIT_RED[self.trump]) else C_TEXT
             team = 'You & North' if self.contract_player % 2 == 0 else 'East & West'
             self.cv.create_rectangle(8, 8, 240, 68, fill='#0a2218', outline=C_GREEN)
             self.cv.create_text(18, 18, anchor='nw',
-                text=f'Atout / Trump: {self.trump}',
+                text=f'Mode: {_mode_label(self.trump)}',
                 fill=ink, font=('Helvetica', 13, 'bold'))
             self.cv.create_text(18, 42, anchor='nw',
                 text=f'Preneurs / Takers: {team}',
@@ -864,37 +954,59 @@ class BeloteApp:
 
         else:
             revealed = self.revealed_card.suit
-            other    = [s for s in SUITS if s != revealed]
+            best_lbl = (f'  |  best bid: {_mode_label(self.best_bid_mode)}'
+                        f'  ({PLAYER_NAMES[self.best_bid_player]})'
+                        if self.best_bid_mode else '')
             self.cv.create_text(px+pw//2, py+16,
-                text=f'Tour de prise  –  Round 2  '
-                     f'(choose trump, not {revealed})',
+                text=f'Tour de prise  –  Round 2  (not {revealed}){best_lbl}',
                 fill=C_TEXT, font=('Helvetica', 11, 'bold'))
 
-            n_btns  = 4
-            btn_w   = min(120, (pw - 40) // n_btns - 8)
+            # All 6 bid options + Pass = 7 buttons
+            all_options = BID_MODES  # ♣ ♦ ♠ ♥ SA TA
+            n_btns  = len(all_options) + 1  # +1 for pass
+            btn_w   = min(100, (pw - 20) // n_btns - 6)
             btn_h   = 52
             btn_y   = py + ph//2 - btn_h//2 + 8
-            total_w = n_btns * btn_w + (n_btns - 1) * 12
+            total_w = n_btns * btn_w + (n_btns - 1) * 8
             bx0     = px + (pw - total_w) // 2
 
-            for i, s in enumerate(other):
-                bx  = bx0 + i * (btn_w + 12)
-                ink = C_RED if SUIT_RED[s] else C_BLACK
-                tag = f'bid_suit_{s}'
-                fill, ol = self._btn_style(tag,
-                                           '#fefae0', C_GOLD,
-                                           '#fff8b0', '#ffe44d')
-                self._rrect(bx, btn_y, btn_w, btn_h, r=8,
-                            fill=fill, outline=ol, width=2, tags=(tag,))
-                self.cv.create_text(bx + btn_w//2, btn_y + btn_h//2,
-                    text=s, fill=ink,
-                    font=('Helvetica', 24), tags=(tag,))
-                self.cv.tag_bind(tag, '<Button-1>',
-                                 lambda e, suit=s: self._on_bid_take(suit))
-                self._bid_buttons[tag] = (bx, btn_y, bx + btn_w, btn_y + btn_h)
+            for i, mode in enumerate(all_options):
+                bx = bx0 + i * (btn_w + 8)
+                tag = f'bid_mode_{mode}'
+                available = (BID_RANK[mode] > self.best_bid_rank
+                             and mode != revealed)
+                if available:
+                    if mode in ('SA', 'TA'):
+                        fill, ol = self._btn_style(tag,
+                                                   '#1a2e4a', '#4a9eff',
+                                                   '#2a4a70', '#80c8ff')
+                        ink = '#80c8ff' if self._bid_hover != tag else '#b0e0ff'
+                    else:
+                        fill, ol = self._btn_style(tag,
+                                                   '#fefae0', C_GOLD,
+                                                   '#fff8b0', '#ffe44d')
+                        ink = C_RED if (mode in SUIT_RED and SUIT_RED[mode]) else C_BLACK
+                    self._rrect(bx, btn_y, btn_w, btn_h, r=8,
+                                fill=fill, outline=ol, width=2, tags=(tag,))
+                    lbl = mode
+                    fsz = ('Helvetica', 22) if mode in SUITS else ('Helvetica', 13, 'bold')
+                    self.cv.create_text(bx + btn_w//2, btn_y + btn_h//2,
+                        text=lbl, fill=ink, font=fsz, tags=(tag,))
+                    self.cv.tag_bind(tag, '<Button-1>',
+                                     lambda e, m=mode: self._on_bid_take(m))
+                    self._bid_buttons[tag] = (bx, btn_y, bx + btn_w, btn_y + btn_h)
+                else:
+                    # Grayed-out unavailable option
+                    self._rrect(bx, btn_y, btn_w, btn_h, r=8,
+                                fill='#1a1a1a', outline='#444', width=1)
+                    lbl = mode
+                    fsz = ('Helvetica', 22) if mode in SUITS else ('Helvetica', 13, 'bold')
+                    ink_dim = C_RED if (mode in SUITS and SUIT_RED[mode]) else '#555'
+                    self.cv.create_text(bx + btn_w//2, btn_y + btn_h//2,
+                        text=lbl, fill=ink_dim, font=fsz)
 
             # Pass button (round 2)
-            bx  = bx0 + 3 * (btn_w + 12)
+            bx  = bx0 + len(all_options) * (btn_w + 8)
             fill, ol = self._btn_style('bid_pass2',
                                        '#3d1818', '#c03030',
                                        '#5c2222', '#e84040')
@@ -993,11 +1105,12 @@ class BeloteApp:
                             text=res_text, fill=res_color,
                             font=('Helvetica', 13, 'bold'))
 
-        trump_ink = C_RED if self.trump and SUIT_RED[self.trump] else C_TEXT
+        trump_ink = C_RED if (self.trump in SUIT_RED and SUIT_RED[self.trump]) else C_TEXT
+        threshold = _score_threshold(self.trump)
         lines = [
-            (f"Trump: {self.trump}  |  Takers: {team_names[ct]}", trump_ink),
+            (f"Mode: {_mode_label(self.trump)}  |  Takers: {team_names[ct]}", trump_ink),
             ('', C_TEXT),
-            (f"{team_names[ct]}  trick pts: {ri.get('taker_trick_pts', 0)}  (need 82)", C_TEXT),
+            (f"{team_names[ct]}  trick pts: {ri.get('taker_trick_pts', 0)}  (need {threshold})", C_TEXT),
             (f"{team_names[at]}  trick pts: {ri.get('def_trick_pts', 0)}", C_TEXT),
         ]
         if ri.get('belote_team') is not None:
@@ -1102,6 +1215,9 @@ class BeloteApp:
         self.selected        = None
         self.bid_round       = 1
         self._bid_count      = 0
+        self.best_bid_rank   = 0
+        self.best_bid_player = -1
+        self.best_bid_mode   = None
         self.round_info      = {}
         self.current         = start
         self.phase           = 'bidding'
@@ -1127,6 +1243,8 @@ class BeloteApp:
     def _detect_belote(self):
         self.belote_player = -1
         self.belote_played = 0
+        if self.trump in ('SA', 'TA'):
+            return
         for pidx in range(4):
             has_k = any(c.suit == self.trump and c.rank == 'K' for c in self.hands[pidx])
             has_q = any(c.suit == self.trump and c.rank == 'Q' for c in self.hands[pidx])
@@ -1145,9 +1263,10 @@ class BeloteApp:
             else:
                 self._apply_pass(pidx)
         else:
-            suit = ai_bid_round2(self.hands[pidx], self.revealed_card.suit)
-            if suit:
-                self._apply_take(pidx, suit)
+            mode = ai_bid_round2(self.hands[pidx], self.revealed_card.suit,
+                                 self.best_bid_rank)
+            if mode:
+                self._apply_bid_r2(pidx, mode)
             else:
                 self._apply_pass(pidx)
 
@@ -1155,13 +1274,34 @@ class BeloteApp:
         trump = suit if suit else self.revealed_card.suit
         self.trump           = trump
         self.contract_player = pidx
+        mode_label = _mode_label(trump)
         self.status.config(
-            text=f'{PLAYER_NAMES[pidx]} takes with {trump}  '
+            text=f'{PLAYER_NAMES[pidx]} takes – {mode_label}  '
                  f'({"round 1" if self.bid_round == 1 else "round 2"})')
         self._deal_remaining(pidx)
         self._detect_belote()
         self._compute_annonces()
         self._show_announcing()
+
+    def _apply_bid_r2(self, pidx: int, mode: str):
+        """Player makes a competitive bid in round 2."""
+        rank = BID_RANK[mode]
+        if rank > self.best_bid_rank:
+            self.best_bid_rank   = rank
+            self.best_bid_player = pidx
+            self.best_bid_mode   = mode
+        self.status.config(
+            text=f'{PLAYER_NAMES[pidx]} bids {_mode_label(mode)}'
+                 f'  (best so far: {_mode_label(self.best_bid_mode)})')
+        self._bid_count += 1
+        self._redraw()
+        if self._bid_count == 4:
+            self.root.after(500, lambda: self._apply_take(
+                self.best_bid_player, self.best_bid_mode))
+        else:
+            self.current = (pidx + 3) % 4
+            if self.current != 0:
+                self.root.after(700, self._ai_bid_step)
 
     def _compute_annonces(self):
         for pidx in range(4):
@@ -1180,32 +1320,49 @@ class BeloteApp:
         self._redraw()
 
     def _apply_pass(self, pidx: int):
-        self._bid_count += 1
         self.status.config(text=f'{PLAYER_NAMES[pidx]} passes')
 
-        if self._bid_count == 4:
-            if self.bid_round == 1:
-                self.bid_round  = 2
-                self._bid_count = 0
-                self.current    = (self.dealer + 1) % 4
+        if self.bid_round == 1:
+            self._bid_count += 1
+            if self._bid_count == 4:
+                self.bid_round       = 2
+                self._bid_count      = 0
+                self.best_bid_rank   = 0
+                self.best_bid_player = -1
+                self.best_bid_mode   = None
+                self.current         = (self.dealer + 1) % 4
                 self.status.config(text='Bidding phase – round 2')
                 self._redraw()
                 if self.current != 0:
                     self.root.after(700, self._ai_bid_step)
             else:
-                self.dealer = (self.dealer + 3) % 4
-                self.status.config(text='No takers – redealing…')
+                self.current = (pidx + 3) % 4
                 self._redraw()
-                self.root.after(1200, self._new_round)
-            return
+                if self.current != 0:
+                    self.root.after(700, self._ai_bid_step)
+        else:
+            # Round 2: count turns (pass or bid), resolve after all 4 have gone
+            self._bid_count += 1
+            self._redraw()
+            if self._bid_count == 4:
+                if self.best_bid_mode is not None:
+                    self.root.after(500, lambda: self._apply_take(
+                        self.best_bid_player, self.best_bid_mode))
+                else:
+                    self.dealer = (self.dealer + 3) % 4
+                    self.status.config(text='No takers – redealing…')
+                    self._redraw()
+                    self.root.after(1200, self._new_round)
+            else:
+                self.current = (pidx + 3) % 4
+                if self.current != 0:
+                    self.root.after(700, self._ai_bid_step)
 
-        self.current = (pidx + 3) % 4
-        self._redraw()
-        if self.current != 0:
-            self.root.after(700, self._ai_bid_step)
-
-    def _on_bid_take(self, suit: Optional[str]):
-        self._apply_take(0, suit)
+    def _on_bid_take(self, suit_or_mode: Optional[str]):
+        if self.bid_round == 1:
+            self._apply_take(0, suit_or_mode)
+        else:
+            self._apply_bid_r2(0, suit_or_mode)
 
     def _on_bid_pass(self):
         self._bid_pass_flash = True
@@ -1221,7 +1378,7 @@ class BeloteApp:
         self.phase   = 'playing'
         self.trick   = []
         self.current = (self.dealer + 3) % 4
-        self.status.config(text=f'Playing  –  trump: {self.trump}')
+        self.status.config(text=f'Playing  –  {_mode_label(self.trump)}')
         self._redraw()
         if self.current != 0:
             self.root.after(800, self._ai_play_step)
@@ -1316,17 +1473,18 @@ class BeloteApp:
             self.litige_pts = 0
             taker_pts = taker_trick + self.belote_pts[ct] + ann_ct
             def_pts   = def_trick   + self.belote_pts[at] + ann_at
-        elif taker_trick >= 82:          # success: takers scored ≥ 82 trick pts
+        elif taker_trick >= _score_threshold(self.trump):
             result = 'success'
             taker_pts = taker_trick + self.belote_pts[ct] + ann_ct
             def_pts   = def_trick   + self.belote_pts[at] + ann_at
             self.scores[ct] += taker_pts + self.litige_pts
             self.scores[at] += def_pts
             self.litige_pts  = 0
-        else:                            # chute: takers got fewer than 82 trick pts
+        else:                            # chute
             result = 'chute'
+            full_pts = _full_trick_pts(self.trump)
             taker_pts = self.belote_pts[ct] + ann_ct
-            def_pts   = 162 + self.belote_pts[at] + ann_at + self.litige_pts
+            def_pts   = full_pts + self.belote_pts[at] + ann_at + self.litige_pts
             self.scores[ct] += taker_pts
             self.scores[at] += def_pts
             self.litige_pts  = 0
