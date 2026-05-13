@@ -629,10 +629,11 @@ class BeloteApp:
             'capot':   ('★', '#ff9f40'),
         }
         TEAM_SHORT = ['Y+N', 'E+W']
-        row_h = 34
+        row_h      = 34
+        ORDER_H    = 62  # height reserved at bottom for card order section
 
         for rnd in reversed(self.round_history):
-            if y + row_h > py + ph - 4:
+            if y + row_h > py + ph - ORDER_H - 4:
                 break
             icon, icon_color = RESULT_ICON.get(rnd['result'], ('?', C_TEXT))
             ct_short = TEAM_SHORT[rnd['ct']]
@@ -663,6 +664,29 @@ class BeloteApp:
                                 text=f'YN:{s0}  EW:{s1}',
                                 fill=C_DIM, font=('Helvetica', 8), anchor='nw')
             y += row_h
+
+        # ── Card order reference (bottom of panel) ───────────────────────────
+        oy = py + ph - ORDER_H
+        self.cv.create_line(px + 8, oy, px + SCORE_W - 8, oy,
+                            fill=C_GREEN, width=1)
+        cx = px + SCORE_W // 2
+        self.cv.create_text(cx, oy + 8,
+                            text='Card order  (strongest → weakest)',
+                            fill=C_GRAY, font=('Helvetica', 7, 'italic'), anchor='center')
+        trump_str = '  '.join(TRUMP_ORDER)
+        plain_str = '  '.join(PLAIN_ORDER)
+        self.cv.create_text(px + 8, oy + 20, anchor='nw',
+                            text='Atout / TA:', fill='#aaddff',
+                            font=('Helvetica', 7, 'bold'))
+        self.cv.create_text(px + 8, oy + 31, anchor='nw',
+                            text=trump_str, fill='#aaddff',
+                            font=('Helvetica', 8))
+        self.cv.create_text(px + 8, oy + 43, anchor='nw',
+                            text='SA / Couleur:', fill=C_DIM,
+                            font=('Helvetica', 7, 'bold'))
+        self.cv.create_text(px + 8, oy + 54, anchor='nw',
+                            text=plain_str, fill=C_DIM,
+                            font=('Helvetica', 8))
 
     def _toggle_trick_reveal(self, team: int):
         self.show_last_trick[team] = not self.show_last_trick[team]
@@ -769,12 +793,17 @@ class BeloteApp:
             self._draw_card_face(cx - CW//2, cy - CH//2, card)
 
         if self.trick_pts[0] or self.trick_pts[1]:
-            self.cv.create_text(
-                CX, CY-125,
-                text=(f'Pts in hand:  '
-                      f'You+N={self.trick_pts[0]}  '
-                      f'E+W={self.trick_pts[1]}'),
-                fill=C_GRAY, font=('Helvetica', 10))
+            threshold = _score_threshold(self.trump)
+            rx = self.W - SCORE_W - 8
+            self.cv.create_text(rx, 12, anchor='ne',
+                text=f'You+N: {self.trick_pts[0]}',
+                fill=C_LIME, font=('Helvetica', 10, 'bold'))
+            self.cv.create_text(rx, 28, anchor='ne',
+                text=f'E+W: {self.trick_pts[1]}',
+                fill='#fca5a5', font=('Helvetica', 10, 'bold'))
+            self.cv.create_text(rx, 44, anchor='ne',
+                text=f'need {threshold} to win',
+                fill=C_GRAY, font=('Helvetica', 8))
 
     def _draw_all_hands(self):
         W, H, CX = self.W, self.H, self.CX
