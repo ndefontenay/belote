@@ -202,6 +202,61 @@ def ai_play(hand: List[Card], trick: List[Tuple[int, Card]],
     return min(plays, key=lambda c: c.pts(trump))
 
 
+# ── Annonces ───────────────────────────────────────────────────────────────────
+def detect_annonces(hand: List[Card]) -> List[dict]:
+    """Return all declarable annonces in hand (carrés and suites ≥ 3)."""
+    from collections import Counter
+    ann = []
+    counts = Counter(c.rank for c in hand)
+    for rank, cnt in counts.items():
+        if cnt == 4:
+            pts = 200 if rank == 'J' else 150 if rank == '9' else 100
+            ann.append({'type': 'carre', 'rank': rank, 'pts': pts, 'suit': None})
+    for suit in SUITS:
+        idxs = sorted(set(RANKS.index(c.rank) for c in hand if c.suit == suit))
+        i = 0
+        while i < len(idxs):
+            j = i
+            while j + 1 < len(idxs) and idxs[j + 1] == idxs[j] + 1:
+                j += 1
+            run = j - i + 1
+            if run >= 3:
+                pts = 100 if run >= 5 else 50 if run == 4 else 20
+                ann.append({'type': 'suite', 'suit': suit, 'len': run,
+                            'top': RANKS[idxs[j]], 'pts': pts})
+            i = j + 1
+    return ann
+
+
+def _ann_sort_key(ann: dict, trump: str) -> tuple:
+    trump_b = 1 if ann.get('suit') == trump else 0
+    if ann['type'] == 'carre':
+        rank_b = 10 if ann['rank'] == 'J' else 9 if ann['rank'] == '9' else 8
+    else:
+        rank_b = RANKS.index(ann['top'])
+    return (ann['pts'], trump_b, rank_b)
+
+
+def ann_winner_team(all_ann: List[List[dict]], trump: str) -> int:
+    """Return 0 (South+North wins), 1 (East+West wins), or -1 (void/none)."""
+    team = [[*all_ann[0], *all_ann[2]], [*all_ann[1], *all_ann[3]]]
+    bests = [max(t, key=lambda a: _ann_sort_key(a, trump)) if t else None
+             for t in team]
+    if not bests[0] and not bests[1]:
+        return -1
+    if not bests[0]:
+        return 1
+    if not bests[1]:
+        return 0
+    k0 = _ann_sort_key(bests[0], trump)
+    k1 = _ann_sort_key(bests[1], trump)
+    if k0 > k1:
+        return 0
+    if k1 > k0:
+        return 1
+    return -1
+
+
 # ── Application ────────────────────────────────────────────────────────────────
 class BeloteApp:
     def __init__(self, root: tk.Tk):
@@ -239,6 +294,9 @@ class BeloteApp:
         self.contract_player: int              = -1
         self.trick:              List[Tuple[int, Card]] = []
         self.played_cards:       List[Card]             = []
+        self.annonces:           List[List[dict]]       = [[], [], [], []]
+        self.annonce_winner_team: int                   = -1
+        self.annonce_pts:        List[int]              = [0, 0]
         self.last_trick_taken:   List[Optional[list]]   = [None, None]
         self.show_last_trick:    List[bool]             = [False, False]
         self.trick_pts:          List[int]              = [0, 0]
@@ -350,6 +408,8 @@ class BeloteApp:
             self._draw_suggestions()
         if self.phase == 'bidding':
             self._draw_bid_panel()
+        if self.phase == 'announcing':
+            self._draw_annonce_panel()
         if self.phase == 'scoring':
             self._draw_score_overlay()
         if self.phase == 'gameover':
@@ -845,6 +905,57 @@ class BeloteApp:
                 text='Passed  ✓', fill=C_LIME,
                 font=('Helvetica', 16, 'bold'))
 
+    # ── Annonce overlay ────────────────────────────────────────────────────────
+    def _draw_annonce_panel(self):
+        W, H = self.W, self.H
+        ow = min(520, W - 40)
+        ox = (W - ow) // 2
+        all_ann = [(pidx, self.annonces[pidx]) for pidx in range(4) if self.annonces[pidx]]
+        oh = 80 + max(len(all_ann), 1) * 26 + 60
+        oy = (H - oh) // 2
+        self._rrect(ox, oy, ow, oh, r=16, fill='#0a2218', outline=C_GOLD, width=3)
+        self.cv.create_text(ox + ow // 2, oy + 22,
+                            text='Annonces', fill=C_GOLD,
+                            font=('Helvetica', 15, 'bold'))
+        y = oy + 48
+        if not all_ann:
+            self.cv.create_text(ox + ow // 2, y + 10,
+                                text='No annonces this round',
+                                fill=C_GRAY, font=('Helvetica', 11, 'italic'))
+            y += 26
+        else:
+            for pidx, anns in all_ann:
+                parts = []
+                for a in sorted(anns, key=lambda x: -x['pts']):
+                    if a['type'] == 'carre':
+                        parts.append(f"Carre {a['rank']}s ({a['pts']})")
+                    else:
+                        parts.append(f"Suite-{a['len']} {a['suit']} to {a['top']} ({a['pts']})")
+                self.cv.create_text(ox + 18, y, text=f'{PLAYER_NAMES[pidx]}:',
+                                    fill=C_TEXT, font=('Helvetica', 10, 'bold'), anchor='nw')
+                self.cv.create_text(ox + 100, y, text='  '.join(parts),
+                                    fill=C_GOLD, font=('Helvetica', 10), anchor='nw')
+                y += 26
+        if self.annonce_winner_team >= 0:
+            teams = ['You & North', 'East & West']
+            wt  = self.annonce_winner_team
+            msg = f'{teams[wt]} win annonces  +{self.annonce_pts[wt]} pts'
+            clr = C_LIME if wt == 0 else '#fca5a5'
+        else:
+            msg = 'Annonces void' if all_ann else ''
+            clr = C_GRAY
+        if msg:
+            self.cv.create_text(ox + ow // 2, y + 14, text=msg,
+                                fill=clr, font=('Helvetica', 11, 'bold'))
+        tag = 'ann_play_btn'
+        by  = oy + oh - 42
+        self._rrect(ox + ow // 2 - 70, by, 140, 32, r=8,
+                    fill='#1b4332', outline=C_GOLD, width=2, tags=(tag,))
+        self.cv.create_text(ox + ow // 2, by + 16,
+                            text='Play ▶', fill='white',
+                            font=('Helvetica', 12, 'bold'), tags=(tag,))
+        self.cv.tag_bind(tag, '<Button-1>', lambda e: self._start_play())
+
     # ── Score overlay ──────────────────────────────────────────────────────────
     def _draw_score_overlay(self):
         W, H = self.W, self.H
@@ -873,23 +984,25 @@ class BeloteApp:
                             text=res_text, fill=res_color,
                             font=('Helvetica', 13, 'bold'))
 
-        trump_ink = C_RED if self.trump and SUIT_RED[self.trump] else C_BLACK
+        trump_ink = C_RED if self.trump and SUIT_RED[self.trump] else C_TEXT
         lines = [
             (f"Trump: {self.trump}  |  Takers: {team_names[ct]}", trump_ink),
             ('', C_TEXT),
-            (f"{team_names[ct]}  tricks pts: {ri.get('taker_trick_pts', 0)}", C_TEXT),
-            (f"{team_names[at]}  tricks pts: {ri.get('def_trick_pts', 0)}", C_TEXT),
+            (f"{team_names[ct]}  trick pts: {ri.get('taker_trick_pts', 0)}  (need 82)", C_TEXT),
+            (f"{team_names[at]}  trick pts: {ri.get('def_trick_pts', 0)}", C_TEXT),
         ]
         if ri.get('belote_team') is not None:
             bteam = team_names[ri['belote_team']]
             lines.append((f"Belote: {bteam} +20 pts  (imprenable)", '#ff9f40'))
+        ann_w = ri.get('ann_winner', -1)
+        ann_p = ri.get('ann_pts', [0, 0])
+        if ann_w >= 0:
+            lines.append((f"Annonces: {team_names[ann_w]} +{ann_p[ann_w]} pts", C_GOLD))
         lines += [
             ('', C_TEXT),
             (f"{team_names[ct]}  total: {ri.get('taker_pts', 0)}", C_TEXT),
             (f"{team_names[at]}  total: {ri.get('def_pts', 0)}", C_TEXT),
         ]
-        if result == 'litige':
-            lines.append((f"Litige: {ri.get('litige_after', 0)} pts carried over", '#ffa0a0'))
 
         for i, (ln, clr) in enumerate(lines):
             self.cv.create_text(ox+ow//2, oy+80 + i*22,
@@ -967,6 +1080,9 @@ class BeloteApp:
         self.contract_player    = -1
         self.trick              = []
         self.played_cards       = []
+        self.annonces           = [[], [], [], []]
+        self.annonce_winner_team = -1
+        self.annonce_pts        = [0, 0]
         self.last_trick_taken   = [None, None]
         self.show_last_trick    = [False, False]
         self.trick_pts          = [0, 0]
@@ -1035,7 +1151,24 @@ class BeloteApp:
                  f'({"round 1" if self.bid_round == 1 else "round 2"})')
         self._deal_remaining(pidx)
         self._detect_belote()
-        self._start_play()
+        self._compute_annonces()
+        self._show_announcing()
+
+    def _compute_annonces(self):
+        for pidx in range(4):
+            self.annonces[pidx] = detect_annonces(self.hands[pidx])
+        wt = ann_winner_team(self.annonces, self.trump)
+        self.annonce_winner_team = wt
+        if wt >= 0:
+            self.annonce_pts[wt] = sum(
+                a['pts'] for pidx in range(4) if pidx % 2 == wt
+                for a in self.annonces[pidx]
+            )
+
+    def _show_announcing(self):
+        self.phase = 'announcing'
+        self.status.config(text='Annonces – click anywhere to play')
+        self._redraw()
 
     def _apply_pass(self, pidx: int):
         self._bid_count += 1
@@ -1051,13 +1184,13 @@ class BeloteApp:
                 if self.current != 0:
                     self.root.after(700, self._ai_bid_step)
             else:
-                self.dealer = (self.dealer + 1) % 4
+                self.dealer = (self.dealer + 3) % 4
                 self.status.config(text='No takers – redealing…')
                 self._redraw()
                 self.root.after(1200, self._new_round)
             return
 
-        self.current = (pidx + 1) % 4
+        self.current = (pidx + 3) % 4
         self._redraw()
         if self.current != 0:
             self.root.after(700, self._ai_bid_step)
@@ -1078,7 +1211,7 @@ class BeloteApp:
     def _start_play(self):
         self.phase   = 'playing'
         self.trick   = []
-        self.current = (self.dealer + 1) % 4
+        self.current = (self.dealer + 3) % 4
         self.status.config(text=f'Playing  –  trump: {self.trump}')
         self._redraw()
         if self.current != 0:
@@ -1100,7 +1233,7 @@ class BeloteApp:
             self._redraw()
             self.root.after(1100, self._finish_trick)
         else:
-            self.current = (pidx + 1) % 4
+            self.current = (pidx + 3) % 4
             self._redraw()
             if self.current != 0:
                 self.root.after(750, self._ai_play_step)
@@ -1150,8 +1283,9 @@ class BeloteApp:
 
         taker_trick = self.trick_pts[ct]
         def_trick   = self.trick_pts[at]
-        taker_pts   = taker_trick + self.belote_pts[ct]
-        def_pts     = def_trick   + self.belote_pts[at]
+        # Belote always imprenable; annonce pts go to the winning annonce team
+        ann_ct = self.annonce_pts[ct] if self.annonce_winner_team == ct else 0
+        ann_at = self.annonce_pts[at] if self.annonce_winner_team == at else 0
 
         all_to_ct = (self.tricks_won[at] == 0)
         all_to_at = (self.tricks_won[ct] == 0)
@@ -1163,22 +1297,29 @@ class BeloteApp:
         if all_to_ct or all_to_at:
             w, l   = (ct, at) if all_to_ct else (at, ct)
             result = 'capot'
-            self.scores[w] += taker_pts + def_pts - self.belote_pts[l] + self.litige_pts
-            self.scores[l] += self.belote_pts[l]
+            # Winner gets all trick pts + belote (both sides) + their annonces; loser keeps belote + their annonces
+            self.scores[w] += (taker_trick + def_trick
+                               - self.belote_pts[l]
+                               + self.belote_pts[w]
+                               + self.annonce_pts[w]
+                               + self.litige_pts)
+            self.scores[l] += self.belote_pts[l] + self.annonce_pts[l]
             self.litige_pts = 0
-        elif taker_pts > def_pts:
+            taker_pts = taker_trick + self.belote_pts[ct] + ann_ct
+            def_pts   = def_trick   + self.belote_pts[at] + ann_at
+        elif taker_trick >= 82:          # success: takers scored ≥ 82 trick pts
             result = 'success'
+            taker_pts = taker_trick + self.belote_pts[ct] + ann_ct
+            def_pts   = def_trick   + self.belote_pts[at] + ann_at
             self.scores[ct] += taker_pts + self.litige_pts
             self.scores[at] += def_pts
             self.litige_pts  = 0
-        elif taker_pts == def_pts:
-            result = 'litige'
-            self.scores[at] += def_pts
-            self.litige_pts += taker_pts
-        else:
+        else:                            # chute: takers got fewer than 82 trick pts
             result = 'chute'
-            self.scores[ct] += self.belote_pts[ct]
-            self.scores[at] += 162 + self.belote_pts[at] + self.litige_pts
+            taker_pts = self.belote_pts[ct] + ann_ct
+            def_pts   = 162 + self.belote_pts[at] + ann_at + self.litige_pts
+            self.scores[ct] += taker_pts
+            self.scores[at] += def_pts
             self.litige_pts  = 0
 
         self.round_num += 1
@@ -1191,6 +1332,8 @@ class BeloteApp:
             'taker_pts':       taker_pts,
             'def_pts':         def_pts,
             'belote_team':     belote_team,
+            'ann_winner':      self.annonce_winner_team,
+            'ann_pts':         list(self.annonce_pts),
             'litige_after':    self.litige_pts,
         }
         self.round_history.append({
@@ -1202,13 +1345,16 @@ class BeloteApp:
             'scores_after': list(self.scores),
         })
 
-        self.dealer = (self.dealer + 1) % 4
+        self.dealer = (self.dealer + 3) % 4
         self.status.config(text='Round over – see results')
         self.phase = 'gameover' if max(self.scores) >= WIN_TARGET else 'scoring'
         self._redraw()
 
     # ── Click handling ─────────────────────────────────────────────────────────
     def _on_canvas_click(self, event):
+        if self.phase == 'announcing':
+            self._start_play()
+            return
         if self.phase == 'last_trick':
             self.trick = []
             self._finish_round()
