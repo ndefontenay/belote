@@ -30,6 +30,7 @@ PLAYER_NAMES = ['You', 'East', 'North', 'West']
 
 # Card dimensions (fixed regardless of window size)
 CW, CH = 88, 124
+SIDE_CARD_MIN_Y = 115  # keep East/West cards below the top-left info box
 
 # Default window size
 DEFAULT_W, DEFAULT_H = 1260, 860
@@ -922,7 +923,7 @@ class BeloteApp:
         if n1 > 0:
             avail_v = self.H - 250
             sp1     = min(CH + 4, avail_v // max(n1, 1))
-            east_top_y = self.CY - (sp1 * (n1 - 1) + CH) // 2
+            east_top_y = max(self.CY - (sp1 * (n1 - 1) + CH) // 2, SIDE_CARD_MIN_Y)
             east_cx    = self.W - SCORE_W - CW - 12 + CW // 2
             self.cv.create_text(east_cx, east_top_y - 16,
                                 text='East  (AI)', fill=C_TEXT,
@@ -931,7 +932,7 @@ class BeloteApp:
         if n3 > 0:
             avail_v = self.H - 250
             sp3     = min(CH + 4, avail_v // max(n3, 1))
-            west_top_y = self.CY - (sp3 * (n3 - 1) + CH) // 2
+            west_top_y = max(self.CY - (sp3 * (n3 - 1) + CH) // 2, SIDE_CARD_MIN_Y)
             west_cx    = 70 + CW // 2
             self.cv.create_text(west_cx, west_top_y - 16,
                                 text='West  (AI)', fill=C_TEXT,
@@ -951,13 +952,13 @@ class BeloteApp:
         elif pos == 'right':
             avail  = H - 250
             spread = min(CH + 4, avail // max(n, 1))
-            sy = CY - (spread*(n-1) + CH) // 2
+            sy = max(CY - (spread*(n-1) + CH) // 2, SIDE_CARD_MIN_Y)
             for i in range(n):
                 self._draw_card_back(W - SCORE_W - CW - 12, sy + i*spread)
         elif pos == 'left':
             avail  = H - 250
             spread = min(CH + 4, avail // max(n, 1))
-            sy = CY - (spread*(n-1) + CH) // 2
+            sy = max(CY - (spread*(n-1) + CH) // 2, SIDE_CARD_MIN_Y)
             for i in range(n):
                 self._draw_card_back(70, sy + i*spread)
 
