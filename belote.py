@@ -531,20 +531,32 @@ class BeloteApp:
                                 fill=C_GOLD, font=('Helvetica', 14))
 
         if self.trump:
-            ink  = C_RED if (self.trump in SUIT_RED and SUIT_RED[self.trump]) else C_TEXT
             team = 'You & North' if self.contract_player % 2 == 0 else 'East & West'
-            self.cv.create_rectangle(8, 8, 240, 68, fill='#0a2218', outline=C_GREEN)
-            self.cv.create_text(18, 18, anchor='nw',
-                text=f'Mode: {_mode_label(self.trump)}',
-                fill=ink, font=('Helvetica', 13, 'bold'))
-            self.cv.create_text(18, 42, anchor='nw',
-                text=f'Preneurs / Takers: {team}',
+            self.cv.create_rectangle(8, 8, 240, 78, fill='#0a2218', outline=C_GREEN)
+            if self.trump in ('SA', 'TA'):
+                mode_name = 'Sans Atout' if self.trump == 'SA' else 'Tout Atout'
+                self.cv.create_text(18, 18, anchor='nw',
+                    text=mode_name,
+                    fill=C_TEXT, font=('Helvetica', 13, 'bold'))
+                self.cv.create_text(18, 40, anchor='nw',
+                    text='Pas d\'atout',
+                    fill=C_GRAY, font=('Helvetica', 9, 'italic'))
+            else:
+                ink = C_RED if SUIT_RED[self.trump] else C_TEXT
+                self.cv.create_text(18, 18, anchor='nw',
+                    text=f'Atout: {self.trump}',
+                    fill=ink, font=('Helvetica', 13, 'bold'))
+                self.cv.create_text(18, 40, anchor='nw',
+                    text='Normale',
+                    fill=C_GRAY, font=('Helvetica', 9, 'italic'))
+            self.cv.create_text(18, 57, anchor='nw',
+                text=f'Preneurs: {team}',
                 fill=C_GOLD, font=('Helvetica', 10))
 
         if self.belote_player >= 0 and self.belote_played > 0:
             msg       = 'Rebelote!' if self.belote_played >= 2 else 'Belote!'
             team_name = 'You & North' if self.belote_player % 2 == 0 else 'East & West'
-            self.cv.create_text(18, 68, anchor='nw',
+            self.cv.create_text(18, 82, anchor='nw',
                 text=f'{msg}  ({team_name})',
                 fill='#ff9f40', font=('Helvetica', 10, 'bold'))
 
