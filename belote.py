@@ -99,6 +99,16 @@ def who_wins(trick: List[Tuple[int, Card]], trump: str) -> int:
     return bp
 
 
+_DISPLAY_SUIT_ORDER = ['♠', '♥', '♣', '♦']  # alternates black-red-black-red
+
+def _sort_hand(hand: List[Card], trump: str = '') -> None:
+    def rank_key(c: Card) -> int:
+        if trump == 'TA' or c.suit == trump:
+            return TRUMP_ORDER.index(c.rank)
+        return PLAIN_ORDER.index(c.rank)
+    hand.sort(key=lambda c: (_DISPLAY_SUIT_ORDER.index(c.suit), rank_key(c)))
+
+
 def legal_plays(hand: List[Card], trick: List[Tuple[int, Card]],
                 trump: str, me: int) -> List[Card]:
     """Return legally playable cards (official Belote rules)."""
@@ -1509,6 +1519,8 @@ class BeloteApp:
             text=f'{PLAYER_NAMES[pidx]} takes – {mode_label}  '
                  f'({"round 1" if self.bid_round == 1 else "round 2"})')
         self._deal_remaining(pidx)
+        for h in self.hands:
+            _sort_hand(h, self.trump)
         self._detect_belote()
         self._compute_annonces()
         self._show_announcing()
