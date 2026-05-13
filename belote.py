@@ -24,15 +24,15 @@ BID_MODES = ['♣', '♦', '♠', '♥', 'SA', 'TA']
 BID_RANK  = {m: i for i, m in enumerate(BID_MODES)}
 
 WIN_TARGET = 501
-SCORE_W    = 215   # width of the right-side score/history panel
+SCORE_W    = 260   # width of the right-side score/history panel
 
 PLAYER_NAMES = ['You', 'East', 'North', 'West']
 
 # Card dimensions (fixed regardless of window size)
-CW, CH = 68, 96
+CW, CH = 80, 112
 
 # Default window size
-DEFAULT_W, DEFAULT_H = 1060, 740
+DEFAULT_W, DEFAULT_H = 1260, 860
 
 BG      = '#2d6a4f'
 BG_DARK = '#1b4332'
@@ -347,7 +347,7 @@ class BeloteApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         root.title("Belote")
-        root.minsize(820, 580)
+        root.minsize(960, 680)
         root.configure(bg=BG_DARK)
 
         self.show_hints = tk.BooleanVar(value=True)
@@ -432,15 +432,15 @@ class BeloteApp:
                        variable=self.show_hints, command=self._redraw,
                        bg=BG_DARK, fg=C_TEXT, selectcolor='#0a2218',
                        activebackground=BG_DARK, activeforeground=C_TEXT,
-                       font=('Helvetica', 12)).pack(side='left', padx=18, pady=10)
+                       font=('Helvetica', 15)).pack(side='left', padx=18, pady=10)
 
         self.status = tk.Label(bar, text='', bg=BG_DARK, fg=C_GOLD,
-                               font=('Helvetica', 12, 'bold'))
+                               font=('Helvetica', 15, 'bold'))
         self.status.pack(side='left', padx=18)
 
         tk.Button(bar, text='New Game', command=self._new_game,
                   bg='#991b1b', fg='white', relief='flat',
-                  font=('Helvetica', 11, 'bold'), padx=12, pady=4,
+                  font=('Helvetica', 14, 'bold'), padx=12, pady=4,
                   cursor='hand2').pack(side='right', padx=18, pady=8)
 
     # ── Drawing primitives ─────────────────────────────────────────────────────
@@ -464,9 +464,9 @@ class BeloteApp:
         h   = CH + 14 if large else CH
         self._rrect(x, y, w, h, fill=bg, outline=ol, width=lw, tags=tags)
         ink = '#888' if dim else (C_RED if SUIT_RED[card.suit] else C_BLACK)
-        f9  = ('Helvetica', 8, 'bold')
-        f8  = ('Helvetica', 8)
-        fsz = ('Helvetica', 24) if large else ('Helvetica', 20)
+        f9  = ('Helvetica', 11, 'bold')
+        f8  = ('Helvetica', 11)
+        fsz = ('Helvetica', 28) if large else ('Helvetica', 24)
         self.cv.create_text(x+5,   y+4,    text=card.rank, fill=ink, font=f9, anchor='nw', tags=tags)
         self.cv.create_text(x+5,   y+15,   text=card.suit, fill=ink, font=f8, anchor='nw', tags=tags)
         self.cv.create_text(x+w//2,y+h//2, text=card.suit, fill=ink, font=fsz,anchor='center',tags=tags)
@@ -474,13 +474,13 @@ class BeloteApp:
         self.cv.create_text(x+w-5, y+h-15, text=card.suit, fill=ink, font=f8, anchor='se', tags=tags)
 
     def _draw_mini_card(self, x, y, card: Card):
-        sw, sh = 48, 66
+        sw, sh = 58, 80
         self._rrect(x, y, sw, sh, r=5, fill='#fffde8', outline=C_GOLD, width=2)
         ink = C_RED if SUIT_RED[card.suit] else C_BLACK
         self.cv.create_text(x+sw//2, y+sh//2-9, text=card.rank,
-                            fill=ink, font=('Helvetica', 10, 'bold'), anchor='center')
+                            fill=ink, font=('Helvetica', 13, 'bold'), anchor='center')
         self.cv.create_text(x+sw//2, y+sh//2+9, text=card.suit,
-                            fill=ink, font=('Helvetica', 13), anchor='center')
+                            fill=ink, font=('Helvetica', 16), anchor='center')
 
     # ── Main redraw ────────────────────────────────────────────────────────────
     def _redraw(self):
@@ -517,7 +517,7 @@ class BeloteApp:
         for x, y, label, partner in info:
             clr = C_LIME if partner else C_TEXT
             self.cv.create_text(x, y, text=label, fill=clr,
-                                font=('Helvetica', 11, 'bold'), anchor='center')
+                                font=('Helvetica', 14, 'bold'), anchor='center')
 
         arrow_pos = {
             0: (CX,                   H-mg-20),
@@ -528,7 +528,7 @@ class BeloteApp:
         if self.phase == 'playing' and self.current in arrow_pos:
             ax, ay = arrow_pos[self.current]
             self.cv.create_text(ax, ay, text='▶',
-                                fill=C_GOLD, font=('Helvetica', 14))
+                                fill=C_GOLD, font=('Helvetica', 17))
 
         if self.trump:
             team = 'You & North' if self.contract_player % 2 == 0 else 'East & West'
@@ -537,33 +537,33 @@ class BeloteApp:
                 mode_name = 'Sans Atout' if self.trump == 'SA' else 'Tout Atout'
                 self.cv.create_text(18, 18, anchor='nw',
                     text=mode_name,
-                    fill=C_TEXT, font=('Helvetica', 13, 'bold'))
+                    fill=C_TEXT, font=('Helvetica', 16, 'bold'))
                 self.cv.create_text(18, 40, anchor='nw',
                     text='Pas d\'atout',
-                    fill=C_GRAY, font=('Helvetica', 9, 'italic'))
+                    fill=C_GRAY, font=('Helvetica', 12, 'italic'))
             else:
                 ink = C_RED if SUIT_RED[self.trump] else C_TEXT
                 self.cv.create_text(18, 18, anchor='nw',
                     text=f'Atout: {self.trump}',
-                    fill=ink, font=('Helvetica', 13, 'bold'))
+                    fill=ink, font=('Helvetica', 16, 'bold'))
                 self.cv.create_text(18, 40, anchor='nw',
                     text='Normale',
-                    fill=C_GRAY, font=('Helvetica', 9, 'italic'))
+                    fill=C_GRAY, font=('Helvetica', 12, 'italic'))
             self.cv.create_text(18, 57, anchor='nw',
                 text=f'Preneurs: {team}',
-                fill=C_GOLD, font=('Helvetica', 10))
+                fill=C_GOLD, font=('Helvetica', 13))
 
         if self.belote_player >= 0 and self.belote_played > 0:
             msg       = 'Rebelote!' if self.belote_played >= 2 else 'Belote!'
             team_name = 'You & North' if self.belote_player % 2 == 0 else 'East & West'
             self.cv.create_text(18, 82, anchor='nw',
                 text=f'{msg}  ({team_name})',
-                fill='#ff9f40', font=('Helvetica', 10, 'bold'))
+                fill='#ff9f40', font=('Helvetica', 13, 'bold'))
 
         if self.litige_pts > 0:
             self.cv.create_text(18, 86, anchor='nw',
                 text=f'Litige: {self.litige_pts} pts in play',
-                fill='#ffa0a0', font=('Helvetica', 10, 'italic'))
+                fill='#ffa0a0', font=('Helvetica', 13, 'italic'))
 
     def _draw_scores(self):
         W, H = self.W, self.H
@@ -576,7 +576,7 @@ class BeloteApp:
         # ── Header ──────────────────────────────────────────────────────────
         self.cv.create_text(px + SCORE_W // 2, py + 14,
                             text=f'FIRST TO {WIN_TARGET}',
-                            fill=C_TEXT, font=('Helvetica', 10, 'bold'))
+                            fill=C_TEXT, font=('Helvetica', 13, 'bold'))
 
         # ── Team scores + progress bars ─────────────────────────────────────
         teams = [
@@ -589,9 +589,9 @@ class BeloteApp:
         for name, score, color in teams:
             # name + score on same row
             self.cv.create_text(bar_x, y, text=name,
-                                fill=color, font=('Helvetica', 9, 'bold'), anchor='nw')
+                                fill=color, font=('Helvetica', 12, 'bold'), anchor='nw')
             self.cv.create_text(px + SCORE_W - 8, y, text=str(score),
-                                fill=color, font=('Helvetica', 10, 'bold'), anchor='ne')
+                                fill=color, font=('Helvetica', 13, 'bold'), anchor='ne')
             y += 15
             # progress bar
             self.cv.create_rectangle(bar_x, y, bar_x + bar_w, y + 8,
@@ -607,7 +607,7 @@ class BeloteApp:
         n1 = max(WIN_TARGET - self.scores[1], 0)
         self.cv.create_text(px + SCORE_W // 2, y + 5,
                             text=f'Need  YN:{n0}  EW:{n1}',
-                            fill=C_GRAY, font=('Helvetica', 8))
+                            fill=C_GRAY, font=('Helvetica', 11))
         y += 18
 
         # ── Separator ───────────────────────────────────────────────────────
@@ -618,7 +618,7 @@ class BeloteApp:
         # ── Round history header ─────────────────────────────────────────────
         self.cv.create_text(px + SCORE_W // 2, y + 7,
                             text=f'Round History  (#{self.round_num})',
-                            fill=C_GRAY, font=('Helvetica', 9, 'bold'))
+                            fill=C_GRAY, font=('Helvetica', 12, 'bold'))
         y += 20
 
         # ── Per-round rows (newest first) ────────────────────────────────────
@@ -630,7 +630,7 @@ class BeloteApp:
         }
         TEAM_SHORT = ['Y+N', 'E+W']
         row_h      = 34
-        ORDER_H    = 62  # height reserved at bottom for card order section
+        ORDER_H    = 210  # height reserved at bottom for card order section
 
         for rnd in reversed(self.round_history):
             if y + row_h > py + ph - ORDER_H - 4:
@@ -646,23 +646,23 @@ class BeloteApp:
             # Round number
             self.cv.create_text(px + 12, y + 5,
                                 text=f'#{rnd["round_num"]}',
-                                fill=C_GRAY, font=('Helvetica', 8), anchor='nw')
+                                fill=C_GRAY, font=('Helvetica', 11), anchor='nw')
             # Icon
             self.cv.create_text(px + 34, y + 5,
                                 text=icon,
-                                fill=icon_color, font=('Helvetica', 9, 'bold'), anchor='nw')
+                                fill=icon_color, font=('Helvetica', 12, 'bold'), anchor='nw')
             # Taker label
             self.cv.create_text(px + 50, y + 5,
                                 text=ct_short,
-                                fill=icon_color, font=('Helvetica', 8, 'bold'), anchor='nw')
+                                fill=icon_color, font=('Helvetica', 11, 'bold'), anchor='nw')
             # Points for this round
             self.cv.create_text(px + SCORE_W - 8, y + 5,
                                 text=f'{rnd["taker_pts"]}–{rnd["def_pts"]}',
-                                fill=C_DIM, font=('Helvetica', 8), anchor='ne')
+                                fill=C_DIM, font=('Helvetica', 11), anchor='ne')
             # Running total
             self.cv.create_text(px + 12, y + 19,
                                 text=f'YN:{s0}  EW:{s1}',
-                                fill=C_DIM, font=('Helvetica', 8), anchor='nw')
+                                fill=C_DIM, font=('Helvetica', 11), anchor='nw')
             y += row_h
 
         # ── Card order reference (bottom of panel) ───────────────────────────
@@ -670,23 +670,40 @@ class BeloteApp:
         self.cv.create_line(px + 8, oy, px + SCORE_W - 8, oy,
                             fill=C_GREEN, width=1)
         cx = px + SCORE_W // 2
-        self.cv.create_text(cx, oy + 8,
-                            text='Card order  (strongest → weakest)',
-                            fill=C_GRAY, font=('Helvetica', 7, 'italic'), anchor='center')
-        trump_str = '  '.join(TRUMP_ORDER)
-        plain_str = '  '.join(PLAIN_ORDER)
-        self.cv.create_text(px + 8, oy + 20, anchor='nw',
-                            text='Atout / TA:', fill='#aaddff',
-                            font=('Helvetica', 7, 'bold'))
-        self.cv.create_text(px + 8, oy + 31, anchor='nw',
-                            text=trump_str, fill='#aaddff',
-                            font=('Helvetica', 8))
-        self.cv.create_text(px + 8, oy + 43, anchor='nw',
-                            text='SA / Couleur:', fill=C_DIM,
-                            font=('Helvetica', 7, 'bold'))
-        self.cv.create_text(px + 8, oy + 54, anchor='nw',
-                            text=plain_str, fill=C_DIM,
-                            font=('Helvetica', 8))
+        self.cv.create_text(cx, oy + 10,
+                            text='Order  (strongest → weakest)',
+                            fill=C_GRAY, font=('Helvetica', 11, 'italic'), anchor='center')
+
+        # Two columns: left = Atout/TA, right = SA/Couleur
+        col_l = px + 10
+        col_r = px + SCORE_W // 2 + 4
+        row_h = 20
+        header_y = oy + 26
+
+        self.cv.create_text(col_l, header_y, anchor='nw',
+                            text='Atout / TA', fill='#aaddff',
+                            font=('Helvetica', 12, 'bold'))
+        self.cv.create_text(col_r, header_y, anchor='nw',
+                            text='SA / Couleur', fill=C_DIM,
+                            font=('Helvetica', 12, 'bold'))
+
+        trump_pts_map = {'J': 20, '9': 14, 'A': 11, '10': 10,
+                         'K': 4,  'Q': 3,  '8': 0,  '7': 0}
+        plain_pts_map = {'A': 11, '10': 10, 'K': 4, 'Q': 3,
+                         'J': 2,  '9': 0,   '8': 0, '7': 0}
+
+        for i, (tr, pl) in enumerate(zip(TRUMP_ORDER, PLAIN_ORDER)):
+            ry = header_y + 18 + i * row_h
+            tr_pts = trump_pts_map[tr]
+            pl_pts = plain_pts_map[pl]
+            tr_clr = '#ffe44d' if tr_pts >= 10 else ('#aaddff' if tr_pts > 0 else '#556677')
+            pl_clr = '#ffe44d' if pl_pts >= 10 else (C_DIM if pl_pts > 0 else '#556677')
+            self.cv.create_text(col_l, ry, anchor='nw',
+                                text=f'{tr:<3} ({tr_pts})',
+                                fill=tr_clr, font=('Helvetica', 12))
+            self.cv.create_text(col_r, ry, anchor='nw',
+                                text=f'{pl:<3} ({pl_pts})',
+                                fill=pl_clr, font=('Helvetica', 12))
 
     def _toggle_trick_reveal(self, team: int):
         self.show_last_trick[team] = not self.show_last_trick[team]
@@ -723,15 +740,15 @@ class BeloteApp:
             self.cv.create_oval(bx, by, bx + 20, by + 20,
                                 fill='#991b1b', outline='white', width=1)
             self.cv.create_text(bx + 10, by + 10, text=str(n),
-                                fill='white', font=('Helvetica', 8, 'bold'))
+                                fill='white', font=('Helvetica', 11, 'bold'))
 
             # Label + click hint
             mid_x = sx + CW // 2 + (depth - 1) * 2
             self.cv.create_text(mid_x, sy + CH + 12, text=labels[team],
-                                fill=colors[team], font=('Helvetica', 8, 'bold'))
+                                fill=colors[team], font=('Helvetica', 11, 'bold'))
             hint = '▲ close' if self.show_last_trick[team] else '▼ peek'
             self.cv.create_text(mid_x, sy + CH + 24, text=hint,
-                                fill=C_GRAY, font=('Helvetica', 7))
+                                fill=C_GRAY, font=('Helvetica', 10))
 
             # Invisible click region
             tag = f'tstack_{team}'
@@ -766,7 +783,7 @@ class BeloteApp:
         self._rrect(px, py, pw, ph, r=8, fill='#0a2218', outline=C_GOLD, width=2)
         self.cv.create_text(px + pw // 2, py + 12,
                             text='Last trick', fill=C_GOLD,
-                            font=('Helvetica', 9, 'bold'))
+                            font=('Helvetica', 12, 'bold'))
 
         for i, (pidx, card) in enumerate(last):
             cx = px + 10 + i * (mw + gap)
@@ -774,7 +791,7 @@ class BeloteApp:
             self._draw_mini_card(cx, cy, card)
             self.cv.create_text(cx + mw // 2, cy + mh + 9,
                                 text=PLAYER_NAMES[pidx][:3],
-                                fill=C_GRAY, font=('Helvetica', 7))
+                                fill=C_GRAY, font=('Helvetica', 10))
 
     def _draw_trick_area(self):
         CX, CY = self.CX, self.CY
@@ -785,7 +802,7 @@ class BeloteApp:
             rx = CX - (CW+10)//2
             ry = CY - (CH+14)//2
             self.cv.create_text(CX, ry-14, text='Carte retournée',
-                                fill=C_GOLD, font=('Helvetica', 9, 'italic'))
+                                fill=C_GOLD, font=('Helvetica', 12, 'italic'))
             self._draw_card_face(rx, ry, self.revealed_card, large=True)
 
         for pidx, card in self.trick:
@@ -797,13 +814,13 @@ class BeloteApp:
             rx = self.W - SCORE_W - 8
             self.cv.create_text(rx, 12, anchor='ne',
                 text=f'You+N: {self.trick_pts[0]}',
-                fill=C_LIME, font=('Helvetica', 10, 'bold'))
+                fill=C_LIME, font=('Helvetica', 13, 'bold'))
             self.cv.create_text(rx, 28, anchor='ne',
                 text=f'E+W: {self.trick_pts[1]}',
-                fill='#fca5a5', font=('Helvetica', 10, 'bold'))
+                fill='#fca5a5', font=('Helvetica', 13, 'bold'))
             self.cv.create_text(rx, 44, anchor='ne',
                 text=f'need {threshold} to win',
-                fill=C_GRAY, font=('Helvetica', 8))
+                fill=C_GRAY, font=('Helvetica', 11))
 
     def _draw_all_hands(self):
         W, H, CX = self.W, self.H, self.CX
@@ -836,10 +853,10 @@ class BeloteApp:
             east_cx    = self.W - SCORE_W - CW - 12 + CW // 2
             self.cv.create_text(east_cx, east_top_y - 16,
                                 text='East  (AI)', fill=C_TEXT,
-                                font=('Helvetica', 11, 'bold'), anchor='center')
+                                font=('Helvetica', 14, 'bold'), anchor='center')
         mg = 85
         self.cv.create_text(mg, self.CY, text='West  (AI)', fill=C_TEXT,
-                            font=('Helvetica', 11, 'bold'), anchor='center')
+                            font=('Helvetica', 14, 'bold'), anchor='center')
 
     def _draw_ai_back(self, pidx: int, pos: str):
         W, H, CX, CY = self.W, self.H, self.CX, self.CY
@@ -889,7 +906,7 @@ class BeloteApp:
         self.cv.create_oval(cpx - r, cpy - r, cpx + r, cpy + r,
                             fill='#1a1a1a', outline=C_GOLD, width=3)
         self.cv.create_text(cpx, cpy, text='C',
-                            fill=C_GOLD, font=('Helvetica', 9, 'bold'))
+                            fill=C_GOLD, font=('Helvetica', 12, 'bold'))
 
     def _draw_suggestions(self):
         hand = self.hands[0]
@@ -907,7 +924,7 @@ class BeloteApp:
             if card == suggestion:
                 cx = sx0 + i * spread + CW // 2
                 self.cv.create_text(cx, y - 16, text='★',
-                                    fill=C_GOLD, font=('Helvetica', 11, 'bold'))
+                                    fill=C_GOLD, font=('Helvetica', 14, 'bold'))
                 break
 
     # ── Hover handling ─────────────────────────────────────────────────────────
@@ -944,7 +961,7 @@ class BeloteApp:
     def _draw_bid_panel(self):
         W, H, CX = self.W, self.H, self.CX
         hand_y = H - CH - 18
-        ph     = 120
+        ph     = 150
         py     = hand_y - ph - 12
         pw     = min(680, W - 80)
         px     = (W - pw) // 2
@@ -959,7 +976,7 @@ class BeloteApp:
             self.cv.create_text(px+pw//2, py+16,
                 text=f'Tour de prise  –  Round 1 of 2  '
                      f'(accept {suit} as trump, or pass)',
-                fill=C_TEXT, font=('Helvetica', 11, 'bold'))
+                fill=C_TEXT, font=('Helvetica', 14, 'bold'))
 
             btn_w = min(160, pw // 2 - 30)
             btn_h = 52
@@ -975,7 +992,7 @@ class BeloteApp:
                         fill=fill, outline=ol, width=2, tags=(tag,))
             self.cv.create_text(px + pw//4, btn_y + btn_h//2,
                 text=f'Take  {suit}', fill=C_TEXT,
-                font=('Helvetica', 14, 'bold'), tags=(tag,))
+                font=('Helvetica', 17, 'bold'), tags=(tag,))
             self.cv.tag_bind(tag, '<Button-1>', lambda e: self._on_bid_take(None))
             self._bid_buttons[tag] = (bx, btn_y, bx + btn_w, btn_y + btn_h)
 
@@ -989,7 +1006,7 @@ class BeloteApp:
                         fill=fill, outline=ol, width=2, tags=(tag,))
             self.cv.create_text(px + 3*pw//4, btn_y + btn_h//2,
                 text='Pass', fill=C_TEXT,
-                font=('Helvetica', 14, 'bold'), tags=(tag,))
+                font=('Helvetica', 17, 'bold'), tags=(tag,))
             self.cv.tag_bind(tag, '<Button-1>', lambda e: self._on_bid_pass())
             self._bid_buttons[tag] = (bx, btn_y, bx + btn_w, btn_y + btn_h)
 
@@ -1000,7 +1017,7 @@ class BeloteApp:
                         if self.best_bid_mode else '')
             self.cv.create_text(px+pw//2, py+16,
                 text=f'Tour de prise  –  Round 2  (not {revealed}){best_lbl}',
-                fill=C_TEXT, font=('Helvetica', 11, 'bold'))
+                fill=C_TEXT, font=('Helvetica', 14, 'bold'))
 
             # All 6 bid options + Pass = 7 buttons
             all_options = BID_MODES  # ♣ ♦ ♠ ♥ SA TA
@@ -1030,7 +1047,7 @@ class BeloteApp:
                     self._rrect(bx, btn_y, btn_w, btn_h, r=8,
                                 fill=fill, outline=ol, width=2, tags=(tag,))
                     lbl = mode
-                    fsz = ('Helvetica', 22) if mode in SUITS else ('Helvetica', 13, 'bold')
+                    fsz = ('Helvetica', 27) if mode in SUITS else ('Helvetica', 16, 'bold')
                     self.cv.create_text(bx + btn_w//2, btn_y + btn_h//2,
                         text=lbl, fill=ink, font=fsz, tags=(tag,))
                     self.cv.tag_bind(tag, '<Button-1>',
@@ -1041,7 +1058,7 @@ class BeloteApp:
                     self._rrect(bx, btn_y, btn_w, btn_h, r=8,
                                 fill='#1a1a1a', outline='#444', width=1)
                     lbl = mode
-                    fsz = ('Helvetica', 22) if mode in SUITS else ('Helvetica', 13, 'bold')
+                    fsz = ('Helvetica', 27) if mode in SUITS else ('Helvetica', 16, 'bold')
                     ink_dim = C_RED if (mode in SUITS and SUIT_RED[mode]) else '#555'
                     self.cv.create_text(bx + btn_w//2, btn_y + btn_h//2,
                         text=lbl, fill=ink_dim, font=fsz)
@@ -1056,7 +1073,7 @@ class BeloteApp:
                         fill=fill, outline=ol, width=2, tags=(tag,))
             self.cv.create_text(bx + btn_w//2, btn_y + btn_h//2,
                 text='Pass', fill=C_TEXT,
-                font=('Helvetica', 13, 'bold'), tags=(tag,))
+                font=('Helvetica', 16, 'bold'), tags=(tag,))
             self.cv.tag_bind(tag, '<Button-1>', lambda e: self._on_bid_pass())
             self._bid_buttons[tag] = (bx, btn_y, bx + btn_w, btn_y + btn_h)
 
@@ -1065,7 +1082,7 @@ class BeloteApp:
                         fill='#1b4332', outline=C_LIME, width=3)
             self.cv.create_text(px + pw//2, py + 60,
                 text='Passed  ✓', fill=C_LIME,
-                font=('Helvetica', 16, 'bold'))
+                font=('Helvetica', 19, 'bold'))
 
     # ── Annonce overlay ────────────────────────────────────────────────────────
     def _draw_annonce_panel(self):
@@ -1078,12 +1095,12 @@ class BeloteApp:
         self._rrect(ox, oy, ow, oh, r=16, fill='#0a2218', outline=C_GOLD, width=3)
         self.cv.create_text(ox + ow // 2, oy + 22,
                             text='Annonces', fill=C_GOLD,
-                            font=('Helvetica', 15, 'bold'))
+                            font=('Helvetica', 18, 'bold'))
         y = oy + 48
         if not all_ann:
             self.cv.create_text(ox + ow // 2, y + 10,
                                 text='No annonces this round',
-                                fill=C_GRAY, font=('Helvetica', 11, 'italic'))
+                                fill=C_GRAY, font=('Helvetica', 14, 'italic'))
             y += 26
         else:
             for pidx, anns in all_ann:
@@ -1094,9 +1111,9 @@ class BeloteApp:
                     else:
                         parts.append(f"Suite-{a['len']} {a['suit']} to {a['top']} ({a['pts']})")
                 self.cv.create_text(ox + 18, y, text=f'{PLAYER_NAMES[pidx]}:',
-                                    fill=C_TEXT, font=('Helvetica', 10, 'bold'), anchor='nw')
+                                    fill=C_TEXT, font=('Helvetica', 13, 'bold'), anchor='nw')
                 self.cv.create_text(ox + 100, y, text='  '.join(parts),
-                                    fill=C_GOLD, font=('Helvetica', 10), anchor='nw')
+                                    fill=C_GOLD, font=('Helvetica', 13), anchor='nw')
                 y += 26
         if self.annonce_winner_team >= 0:
             teams = ['You & North', 'East & West']
@@ -1108,14 +1125,14 @@ class BeloteApp:
             clr = C_GRAY
         if msg:
             self.cv.create_text(ox + ow // 2, y + 14, text=msg,
-                                fill=clr, font=('Helvetica', 11, 'bold'))
+                                fill=clr, font=('Helvetica', 14, 'bold'))
         tag = 'ann_play_btn'
         by  = oy + oh - 42
         self._rrect(ox + ow // 2 - 70, by, 140, 32, r=8,
                     fill='#1b4332', outline=C_GOLD, width=2, tags=(tag,))
         self.cv.create_text(ox + ow // 2, by + 16,
                             text='Play ▶', fill='white',
-                            font=('Helvetica', 12, 'bold'), tags=(tag,))
+                            font=('Helvetica', 15, 'bold'), tags=(tag,))
         self.cv.tag_bind(tag, '<Button-1>', lambda e: self._start_play())
 
     # ── Score overlay ──────────────────────────────────────────────────────────
@@ -1141,10 +1158,10 @@ class BeloteApp:
 
         self.cv.create_text(ox+ow//2, oy+24,
                             text='Round over', fill=C_GOLD,
-                            font=('Helvetica', 15, 'bold'))
+                            font=('Helvetica', 18, 'bold'))
         self.cv.create_text(ox+ow//2, oy+52,
                             text=res_text, fill=res_color,
-                            font=('Helvetica', 13, 'bold'))
+                            font=('Helvetica', 16, 'bold'))
 
         trump_ink = C_RED if (self.trump in SUIT_RED and SUIT_RED[self.trump]) else C_TEXT
         threshold = _score_threshold(self.trump)
@@ -1169,25 +1186,25 @@ class BeloteApp:
 
         for i, (ln, clr) in enumerate(lines):
             self.cv.create_text(ox+ow//2, oy+80 + i*22,
-                                text=ln, fill=clr, font=('Helvetica', 11))
+                                text=ln, fill=clr, font=('Helvetica', 14))
 
         sep_y = oy + 80 + len(lines) * 22 + 6
         self.cv.create_line(ox+30, sep_y, ox+ow-30, sep_y,
                             fill='#2d6a4f', width=1)
         self.cv.create_text(ox+ow//2, sep_y+14,
                             text='Running scores:', fill=C_GRAY,
-                            font=('Helvetica', 10))
+                            font=('Helvetica', 13))
         self.cv.create_text(ox+ow//2, sep_y+32,
                             text=f'You & North: {self.scores[0]}   '
                                  f'East & West: {self.scores[1]}',
-                            fill=C_TEXT, font=('Helvetica', 11, 'bold'))
+                            fill=C_TEXT, font=('Helvetica', 14, 'bold'))
 
         tag = 'next_round'
         self._rrect(ox+ow//2-70, oy+oh-44, 140, 34, r=8,
                     fill='#991b1b', outline=C_GOLD, width=2, tags=(tag,))
         self.cv.create_text(ox+ow//2, oy+oh-27,
                             text='Next round ▶', fill='white',
-                            font=('Helvetica', 12, 'bold'), tags=(tag,))
+                            font=('Helvetica', 15, 'bold'), tags=(tag,))
         self.cv.tag_bind(tag, '<Button-1>', lambda e: self._new_round())
 
     def _draw_gameover_overlay(self):
@@ -1202,21 +1219,21 @@ class BeloteApp:
         self._rrect(ox, oy, ow, oh, r=16, fill='#0a2218', outline=C_GOLD, width=3)
         self.cv.create_text(ox+ow//2, oy+36,
                             text='Game Over', fill=C_GOLD,
-                            font=('Helvetica', 18, 'bold'))
+                            font=('Helvetica', 21, 'bold'))
         self.cv.create_text(ox+ow//2, oy+80,
                             text=f'  {team} win!', fill=color,
-                            font=('Helvetica', 15, 'bold'))
+                            font=('Helvetica', 18, 'bold'))
         self.cv.create_text(ox+ow//2, oy+120,
                             text=f'Final: You & North {self.scores[0]}   '
                                  f'East & West {self.scores[1]}',
-                            fill=C_TEXT, font=('Helvetica', 12))
+                            fill=C_TEXT, font=('Helvetica', 15))
 
         tag = 'new_game_btn'
         self._rrect(ox+ow//2-80, oy+oh-54, 160, 38, r=8,
                     fill='#991b1b', outline=C_GOLD, width=2, tags=(tag,))
         self.cv.create_text(ox+ow//2, oy+oh-35,
                             text='New Game', fill='white',
-                            font=('Helvetica', 13, 'bold'), tags=(tag,))
+                            font=('Helvetica', 16, 'bold'), tags=(tag,))
         self.cv.tag_bind(tag, '<Button-1>', lambda e: self._new_game())
 
     # ── Game flow ──────────────────────────────────────────────────────────────
