@@ -138,10 +138,37 @@ def legal_plays(hand: List[Card], trick: List[Tuple[int, Card]],
 
 
 # ── AI ─────────────────────────────────────────────────────────────────────────
-def _hand_score(hand: List[Card], trump: str) -> float:
-    return (sum(TRUMP_PTS[c.rank] for c in hand if c.suit == trump)
-            + sum(PLAIN_PTS[c.rank] for c in hand if c.suit != trump) * 0.25
-            + sum(1 for c in hand if c.suit == trump) * 7)
+def _bid_score_normal(hand: List[Card], suit: str,
+                      extra_card: Optional[Card] = None) -> tuple:
+    """Score a normal-trump hand for bidding. Returns (score, metadata dict).
+
+    extra_card: the revealed card (counts toward trump if same suit, added to hand).
+    Score components:
+      - Trump pts: J=20, 9=14, A=11, 10=10, K=4, Q=3
+      - Trump length bonus: 4→+8, 5→+18, 6→+25, 7+→+30
+      - Side aces: +8 each (guaranteed points + hand control)
+      - Isolated 10s (10 without matching A): -5 each (vulnerable to opponent's A)
+    """
+    trump_cards = [c for c in hand if c.suit == suit]
+    if extra_card and extra_card.suit == suit:
+        trump_cards = trump_cards + [extra_card]
+
+    has_j   = any(c.rank == 'J' for c in trump_cards)
+    has_9   = any(c.rank == '9' for c in trump_cards)
+    n_trump = len(trump_cards)
+    t_pts   = sum(TRUMP_PTS[c.rank] for c in trump_cards)
+
+    side_aces = sum(1 for c in hand if c.rank == 'A' and c.suit != suit)
+    iso_tens  = sum(
+        1 for c in hand if c.rank == '10' and c.suit != suit
+        and not any(o.suit == c.suit and o.rank == 'A' for o in hand)
+    )
+
+    len_bonus = (0, 0, 0, 0, 8, 18, 25, 30)[min(n_trump, 7)]
+    score = t_pts + len_bonus + side_aces * 8 - iso_tens * 5
+
+    return score, {'has_j': has_j, 'has_9': has_9, 'n_trump': n_trump,
+                   'side_aces': side_aces}
 
 
 def _is_master(card: Card, trump: str, played: set) -> bool:
@@ -156,71 +183,94 @@ def _is_master(card: Card, trump: str, played: set) -> bool:
     return all(Card(card.suit, r) in played for r in order[:idx])
 
 
-def ai_bid_round1(hand: List[Card], revealed_card: Card) -> bool:
-    """See AI_RULES.md – Bidding Round 1."""
-    suit = revealed_card.suit
-    # Rule 1: J is on the table → always take
-    if revealed_card.rank == 'J':
-        return True
-    # Rule 2: AI holds the J of the offered suit → take
-    if any(c.suit == suit and c.rank == 'J' for c in hand):
-        return True
-    # Rule 3: AI holds the 9 + ≥1 other trump → 3 trumps with revealed card
-    trump_in_hand = sum(1 for c in hand if c.suit == suit)
-    if any(c.suit == suit and c.rank == '9' for c in hand) and trump_in_hand >= 2:
-        return True
-    # Fallback: score heuristic
-    return _hand_score(hand, suit) >= 58
+def ai_bid_round1(hand: List[Card], revealed_card: Card,
+                  passes_before: int = 0) -> bool:
+    """Return True if AI should take the contract in round 1.
+
+    passes_before: number of players who passed before this AI (0–3).
+    Strategy: J is required except in exceptional cases; later position = lower bar.
+    """
+    sc, m = _bid_score_normal(hand, revealed_card.suit, revealed_card)
+
+    if not m['has_j']:
+        # Exceptional cases without J
+        if m['n_trump'] >= 5:        # long suit compensates
+            return True
+        if m['has_9'] and m['n_trump'] >= 4 and passes_before >= 2:
+            return True
+        if m['has_9'] and m['n_trump'] >= 3 and m['side_aces'] >= 2 and passes_before >= 3:
+            return True
+        return False
+
+    # With J: position-adjusted threshold (earlier position = higher bar)
+    threshold = (42, 38, 34, 28)[min(passes_before, 3)]
+    return sc >= threshold
 
 
 def ai_bid_round2(hand: List[Card], revealed_suit: str,
-                  min_bid_rank: int = 0) -> Optional[str]:
-    """Bidding Round 2 – returns best bid mode or None to pass.
+                  min_bid_rank: int = 0,
+                  passes_before: int = 0) -> Optional[str]:
+    """Return best bid mode or None to pass in round 2.
 
-    min_bid_rank: only consider bids with BID_RANK > this value (competitive bidding).
+    min_bid_rank: only consider bids ranked strictly above this.
+    passes_before: players who have already acted in round 2 (0–3).
+    Round 2 has a higher bar: the revealed card goes to the taker's opponent pile.
     """
-    best_mode, best_score = None, 40
+    best_mode, best_score = None, 47  # higher floor than round 1 (min to bid: 48)
 
     for s in SUITS:
-        if s == revealed_suit:
+        if s == revealed_suit or BID_RANK[s] <= min_bid_rank:
             continue
-        if BID_RANK[s] <= min_bid_rank:
-            continue
-        sc = _hand_score(hand, s)
-        if any(c.suit == s and c.rank == 'J' for c in hand):
-            sc += 20
-        trump_count = sum(1 for c in hand if c.suit == s)
-        if any(c.suit == s and c.rank == '9' for c in hand) and trump_count >= 2:
-            sc += 10
+
+        sc, m = _bid_score_normal(hand, s)
+
+        if not m['has_j']:
+            # Allow without J only for very long or 9-heavy suits
+            if m['n_trump'] >= 5:
+                sc -= 5
+            elif m['has_9'] and m['n_trump'] >= 4:
+                sc -= 12
+            else:
+                continue  # don't bid without J in round 2
+
+        sc += passes_before * 3  # later position = slightly lower risk
+
         if sc > best_score:
             best_score, best_mode = sc, s
 
-    # Consider SA: good when hand has many Aces and 10s
+    # SA: Aces and 10s heavy
     if BID_RANK['SA'] > min_bid_rank:
         sa_sc = sum(PLAIN_PTS[c.rank] for c in hand)
         aces  = sum(1 for c in hand if c.rank == 'A')
         tens  = sum(1 for c in hand if c.rank == '10')
         if (aces >= 3 or tens >= 3 or (aces >= 2 and tens >= 2)) and sa_sc >= 55:
-            if sa_sc > best_score:
-                best_score, best_mode = sa_sc, 'SA'
+            sa_adj = sa_sc + passes_before * 3
+            if sa_adj > best_score:
+                best_score, best_mode = sa_adj, 'SA'
 
-    # Consider TA: good when hand is heavy in Jacks and 9s
+    # TA: Jacks and 9s heavy
     if BID_RANK['TA'] > min_bid_rank:
         jacks = sum(1 for c in hand if c.rank == 'J')
         nines = sum(1 for c in hand if c.rank == '9')
-        ta_sc = jacks * 25 + nines * 15 + sum(TRUMP_PTS[c.rank] for c in hand) * 0.3
+        ta_sc = int(jacks * 25 + nines * 15 + sum(TRUMP_PTS[c.rank] for c in hand) * 0.3)
         if (jacks >= 3 or nines >= 3 or (jacks >= 2 and nines >= 2)) and ta_sc >= 55:
-            if ta_sc > best_score:
-                best_score, best_mode = ta_sc, 'TA'
+            ta_adj = ta_sc + passes_before * 3
+            if ta_adj > best_score:
+                best_score, best_mode = ta_adj, 'TA'
 
     return best_mode
+
+
+def _trick_pts(trick: List[Tuple[int, Card]], trump: str) -> int:
+    """Total point value currently in a trick."""
+    return sum(c.pts(trump) for _, c in trick)
 
 
 def ai_play(hand: List[Card], trick: List[Tuple[int, Card]],
             trump: str, me: int,
             played_cards: Optional[List[Card]] = None,
             contract_player: int = -1) -> Card:
-    """See AI_RULES.md – Playing."""
+    """Belote AI – playing phase."""
     plays   = legal_plays(hand, trick, trump, me)
     played  = set(played_cards) if played_cards else set()
     partner = (me + 2) % 4
@@ -228,36 +278,59 @@ def ai_play(hand: List[Card], trick: List[Tuple[int, Card]],
                             and contract_player % 2 == me % 2
                             and contract_player != me)
 
+    # ── Leading ──────────────────────────────────────────────────────────────
     if not trick:
-        # Priority 1: lead a master card (guaranteed win)
+        # 1. Lead a master card (guaranteed win) — prefer highest value
         masters = [c for c in plays if _is_master(c, trump, played)]
         if masters:
             return max(masters, key=lambda c: c.pts(trump))
+
         ts = [c for c in plays if c.suit == trump]
-        # Priority 2: partner took contract → lead trump to drain opponents
-        if partner_has_contract and ts:
+        # 2. Partner or self took contract → lead trump to exhaust opponents
+        if (partner_has_contract or contract_player == me) and ts:
             return max(ts, key=lambda c: c.power(trump, trump))
-        # Priority 3: we took contract → lead trump aggressively
-        if contract_player == me and ts:
-            return max(ts, key=lambda c: c.power(trump, trump))
-        # Default: highest point value — but avoid leading trump 9 while trump J is still live
+
+        # 3. Default: lead highest-value card, but don't lead trump 9 while J is live
         trump_j_out = any(c.suit == trump and c.rank == 'J' for c in played)
         safe = [c for c in plays
                 if not (c.suit == trump and c.rank == '9' and not trump_j_out)]
         return max((safe or plays), key=lambda c: c.pts(trump))
 
+    # ── Following ─────────────────────────────────────────────────────────────
     led   = trick[0][1].suit
     p_win = who_wins(trick, trump) == partner
+    tv    = _trick_pts(trick, trump)   # points already in the trick
 
-    # Partner winning → give them points
+    # Partner is currently winning this trick
     if p_win:
-        return max(plays, key=lambda c: c.pts(trump))
+        if tv >= 10:
+            # Valuable trick → pile on our best card to maximise haul
+            return max(plays, key=lambda c: c.pts(trump))
+        else:
+            # Cheap trick → discard our least valuable card; save good ones
+            return min(plays, key=lambda c: c.pts(trump))
 
+    # Opponent is currently winning — try to take the trick
     best = max(c.power(trump, led) for _, c in trick)
     win  = [c for c in plays if c.power(trump, led) > best]
+
     if win:
-        return min(win, key=lambda c: c.power(trump, led))
-    return min(plays, key=lambda c: c.pts(trump))
+        if tv >= 10:
+            # Worth taking → use the minimum force needed (save stronger cards)
+            return min(win, key=lambda c: c.power(trump, led))
+        else:
+            # Cheap trick → prefer a non-trump winner to spare our trumps
+            non_trump_win = [c for c in win if c.suit != trump]
+            if non_trump_win:
+                return min(non_trump_win, key=lambda c: c.power(trump, led))
+            # Only trump can win; legal rules already force us to cut → minimise waste
+            return min(win, key=lambda c: c.power(trump, led))
+
+    # Can't win this trick → smart discard
+    # Prefer to shed from suits where we hold no future winners, to protect masters
+    master_suits = {c.suit for c in hand if _is_master(c, trump, played)}
+    discard_pool = [c for c in plays if c.suit not in master_suits] or plays
+    return min(discard_pool, key=lambda c: c.pts(trump))
 
 
 # ── Annonces ───────────────────────────────────────────────────────────────────
@@ -1322,13 +1395,13 @@ class BeloteApp:
             return
         pidx = self.current
         if self.bid_round == 1:
-            if ai_bid_round1(self.hands[pidx], self.revealed_card):
+            if ai_bid_round1(self.hands[pidx], self.revealed_card, self._bid_count):
                 self._apply_take(pidx, None)
             else:
                 self._apply_pass(pidx)
         else:
             mode = ai_bid_round2(self.hands[pidx], self.revealed_card.suit,
-                                 self.best_bid_rank)
+                                 self.best_bid_rank, self._bid_count)
             if mode:
                 self._apply_bid_r2(pidx, mode)
             else:
