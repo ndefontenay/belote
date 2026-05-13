@@ -791,11 +791,11 @@ class BeloteApp:
         if not any(self.tricks_won):
             return
 
-        # Team 0 (You+North): in front of South, bottom-left of centre
-        # Team 1 (East+West):  in front of West, left side
+        # Team 0 (You+North): right of centre, above South's hand
+        # Team 1 (East+West): between West's cards and oval, upper half
         stack_pos = [
-            (CX - CW - 60,  H - CH - 110),
-            (148,            CY + 60),
+            (CX + 90,  H - CH - 186),
+            (175,      CY - 90),
         ]
         colors = [C_LIME, '#fca5a5']
         labels = ['You+N', 'E+W']
