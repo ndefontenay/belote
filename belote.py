@@ -448,6 +448,9 @@ class BeloteApp:
         self.best_bid_player: int           = -1
         self.best_bid_mode:   Optional[str] = None
 
+        # Per-player bid actions shown during auction (player_idx → label str)
+        self.bid_actions:     dict          = {}
+
         # Round state
         self.hands:           List[List[Card]] = [[], [], [], []]
         self.trump:           Optional[str]    = None
@@ -788,11 +791,11 @@ class BeloteApp:
         if not any(self.tricks_won):
             return
 
-        # Team 0 (You+North): in front of South, bottom-left of centre
-        # Team 1 (East+West):  in front of West, left side
+        # Team 0 (You+North): right of centre, above South's hand
+        # Team 1 (East+West): between West's cards and oval, upper half
         stack_pos = [
-            (CX - CW - 60,  H - CH - 110),
-            (148,            CY + 60),
+            (CX + 90,  H - CH - 186),
+            (175,      CY - 90),
         ]
         colors = [C_LIME, '#fca5a5']
         labels = ['You+N', 'E+W']
@@ -867,6 +870,29 @@ class BeloteApp:
                                 text=PLAYER_NAMES[pidx][:3],
                                 fill=C_GRAY, font=('Helvetica', 10))
 
+    def _draw_bid_action_labels(self):
+        """Show each player's latest bid action (Passe / Prend / mode) near their seat."""
+        CX, CY = self.CX, self.CY
+        # Positions: inset from each player's edge toward the table center
+        seats = {
+            0: (CX,       CY + 80),   # South
+            1: (CX + 145, CY),        # East
+            2: (CX,       CY - 80),   # North
+            3: (CX - 145, CY),        # West
+        }
+        for pidx, lbl in self.bid_actions.items():
+            x, y = seats[pidx]
+            is_pass = lbl == 'Passe'
+            bg   = '#1a3a28' if is_pass else '#1a2e4a'
+            fg   = C_GRAY   if is_pass else C_GOLD
+            pad  = 10
+            tw   = len(lbl) * 7 + pad * 2   # rough text width
+            th   = 26
+            self._rrect(x - tw // 2, y - th // 2, tw, th, r=8,
+                        fill=bg, outline=fg, width=1)
+            self.cv.create_text(x, y, text=lbl, fill=fg,
+                                font=('Helvetica', 12, 'bold'), anchor='center')
+
     def _draw_trick_area(self):
         CX, CY = self.CX, self.CY
         self.cv.create_oval(CX-105, CY-110, CX+105, CY+110,
@@ -878,6 +904,7 @@ class BeloteApp:
             self.cv.create_text(CX, ry-14, text='Carte retournée',
                                 fill=C_GOLD, font=('Helvetica', 12, 'italic'))
             self._draw_card_face(rx, ry, self.revealed_card, large=True)
+            self._draw_bid_action_labels()
 
         for pidx, card in self.trick:
             cx, cy = self._trick_xy[pidx]
@@ -1356,6 +1383,7 @@ class BeloteApp:
         self.best_bid_rank   = 0
         self.best_bid_player = -1
         self.best_bid_mode   = None
+        self.bid_actions     = {}
         self.round_info      = {}
         self.current         = start
         self.phase           = 'bidding'
@@ -1413,6 +1441,7 @@ class BeloteApp:
         self.trump           = trump
         self.contract_player = pidx
         mode_label = _mode_label(trump)
+        self.bid_actions[pidx] = f'Prend  {mode_label}'
         self.status.config(
             text=f'{PLAYER_NAMES[pidx]} takes – {mode_label}  '
                  f'({"round 1" if self.bid_round == 1 else "round 2"})')
@@ -1428,6 +1457,7 @@ class BeloteApp:
             self.best_bid_rank   = rank
             self.best_bid_player = pidx
             self.best_bid_mode   = mode
+        self.bid_actions[pidx] = _mode_label(mode)
         self.status.config(
             text=f'{PLAYER_NAMES[pidx]} bids {_mode_label(mode)}'
                  f'  (best so far: {_mode_label(self.best_bid_mode)})')
@@ -1458,6 +1488,7 @@ class BeloteApp:
         self._redraw()
 
     def _apply_pass(self, pidx: int):
+        self.bid_actions[pidx] = 'Passe'
         self.status.config(text=f'{PLAYER_NAMES[pidx]} passes')
 
         if self.bid_round == 1:
