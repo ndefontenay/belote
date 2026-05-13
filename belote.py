@@ -669,12 +669,20 @@ class BeloteApp:
         if self.contract_player < 0 or not self.trump:
             return
         W, H, CX, CY = self.W, self.H, self.CX, self.CY
-        mg = 85
+        # Place chip at top-right corner of each player's card area
+        n0 = len(self.hands[0])
+        avail  = W - 120
+        spread = min(CW + 6, avail // max(n0, 1))
+        south_right = CX + (spread * (max(n0, 1) - 1) + CW) // 2
+        n_vert = max(len(self.hands[1]), len(self.hands[3]), 1)
+        avail_v = H - 250
+        spreadv = min(CH + 4, avail_v // n_vert)
+        vert_top = CY - (spreadv * (n_vert - 1) + CH) // 2
         chip_pos = {
-            0: (CX + 80,                    H - mg),
-            1: (W - SCORE_W - mg // 2 + 55, CY - 18),
-            2: (CX + 80,                    55),
-            3: (mg + CW + 30,               CY),
+            0: (south_right + 14,          H - CH - 18),
+            1: (W - SCORE_W - CW - 12 + CW + 14, vert_top),
+            2: (CX + (spread * (max(len(self.hands[2]), 1) - 1) + CW) // 2 + 14, 68),
+            3: (70 + CW + 14,              vert_top),
         }
         cpx, cpy = chip_pos[self.contract_player]
         r = 11
