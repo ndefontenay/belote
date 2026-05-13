@@ -20,6 +20,7 @@ TRUMP_PTS = {'J': 20, '9': 14, 'A': 11, '10': 10, 'K': 4, 'Q': 3, '8': 0, '7': 0
 PLAIN_PTS = {'A': 11, '10': 10, 'K': 4, 'Q': 3, 'J': 2, '9': 0, '8': 0, '7': 0}
 
 WIN_TARGET = 501
+SCORE_W    = 215   # width of the right-side score/history panel
 
 PLAYER_NAMES = ['You', 'East', 'North', 'West']
 
@@ -171,8 +172,10 @@ class BeloteApp:
         self.CY = int(DEFAULT_H * 0.455)
 
         # Persistent across rounds
-        self.scores     = [0, 0]
-        self.litige_pts = 0
+        self.scores       = [0, 0]
+        self.litige_pts   = 0
+        self.round_num    = 0
+        self.round_history: List[dict] = []
 
         # Round state
         self.hands:           List[List[Card]] = [[], [], [], []]
@@ -299,10 +302,10 @@ class BeloteApp:
         self.cv.create_oval(40, 30, W-40, H-20,
                             fill=BG, outline=C_GREEN, width=3)
         info = [
-            (CX,    H-mg,  'YOU  (South)',          True),
-            (W-mg,  CY,    'East  (AI)',             False),
-            (CX,    50,    'North  (AI · partner)',  True),
-            (mg,    CY,    'West  (AI)',             False),
+            (CX,              H-mg,  'YOU  (South)',          True),
+            (W-SCORE_W-mg//2, CY,    'East  (AI)',             False),
+            (CX,              50,    'North  (AI · partner)',  True),
+            (mg,              CY,    'West  (AI)',             False),
         ]
         for x, y, label, partner in info:
             clr = C_LIME if partner else C_TEXT
@@ -310,10 +313,10 @@ class BeloteApp:
                                 font=('Helvetica', 11, 'bold'), anchor='center')
 
         arrow_pos = {
-            0: (CX,    H-mg-20),
-            1: (W-mg-70, CY),
-            2: (CX,    70),
-            3: (mg+70, CY),
+            0: (CX,                   H-mg-20),
+            1: (W-SCORE_W-mg//2-50,  CY),
+            2: (CX,                   70),
+            3: (mg+70,                CY),
         }
         if self.phase == 'playing' and self.current in arrow_pos:
             ax, ay = arrow_pos[self.current]
@@ -344,18 +347,103 @@ class BeloteApp:
                 fill='#ffa0a0', font=('Helvetica', 10, 'italic'))
 
     def _draw_scores(self):
-        W = self.W
-        bx, by, bw, bh = W-218, 8, 210, 74
-        self.cv.create_rectangle(bx, by, bx+bw, by+bh,
+        W, H = self.W, self.H
+        px, py = W - SCORE_W, 5
+        ph = H - 10
+
+        self.cv.create_rectangle(px, py, px + SCORE_W, py + ph,
                                  fill='#0a2218', outline=C_GREEN, width=2)
-        self.cv.create_text(bx+bw//2, by+13, text='SCORES  (first to 501)',
+
+        # ── Header ──────────────────────────────────────────────────────────
+        self.cv.create_text(px + SCORE_W // 2, py + 14,
+                            text=f'FIRST TO {WIN_TARGET}',
                             fill=C_TEXT, font=('Helvetica', 10, 'bold'))
-        self.cv.create_text(bx+bw//2, by+36,
-                            text=f'You & North: {self.scores[0]}',
-                            fill=C_LIME, font=('Helvetica', 11))
-        self.cv.create_text(bx+bw//2, by+58,
-                            text=f'East & West: {self.scores[1]}',
-                            fill='#fca5a5', font=('Helvetica', 11))
+
+        # ── Team scores + progress bars ─────────────────────────────────────
+        teams = [
+            ('You & North', self.scores[0], C_LIME),
+            ('East & West', self.scores[1], '#fca5a5'),
+        ]
+        bar_w  = SCORE_W - 20
+        bar_x  = px + 10
+        y      = py + 28
+        for name, score, color in teams:
+            # name + score on same row
+            self.cv.create_text(bar_x, y, text=name,
+                                fill=color, font=('Helvetica', 9, 'bold'), anchor='nw')
+            self.cv.create_text(px + SCORE_W - 8, y, text=str(score),
+                                fill=color, font=('Helvetica', 10, 'bold'), anchor='ne')
+            y += 15
+            # progress bar
+            self.cv.create_rectangle(bar_x, y, bar_x + bar_w, y + 8,
+                                     fill='#1b4332', outline='#2d6a4f', width=1)
+            fill_px = int(bar_w * min(score, WIN_TARGET) / WIN_TARGET)
+            if fill_px > 0:
+                self.cv.create_rectangle(bar_x, y, bar_x + fill_px, y + 8,
+                                         fill=color, outline='')
+            y += 13
+
+        # ── Points needed ───────────────────────────────────────────────────
+        n0 = max(WIN_TARGET - self.scores[0], 0)
+        n1 = max(WIN_TARGET - self.scores[1], 0)
+        self.cv.create_text(px + SCORE_W // 2, y + 5,
+                            text=f'Need  YN:{n0}  EW:{n1}',
+                            fill=C_GRAY, font=('Helvetica', 8))
+        y += 18
+
+        # ── Separator ───────────────────────────────────────────────────────
+        self.cv.create_line(px + 8, y, px + SCORE_W - 8, y,
+                            fill=C_GREEN, width=1)
+        y += 6
+
+        # ── Round history header ─────────────────────────────────────────────
+        self.cv.create_text(px + SCORE_W // 2, y + 7,
+                            text=f'Round History  (#{self.round_num})',
+                            fill=C_GRAY, font=('Helvetica', 9, 'bold'))
+        y += 20
+
+        # ── Per-round rows (newest first) ────────────────────────────────────
+        RESULT_ICON = {
+            'success': ('✓', C_LIME),
+            'chute':   ('✗', '#ff6b6b'),
+            'litige':  ('⚖', C_GOLD),
+            'capot':   ('★', '#ff9f40'),
+        }
+        TEAM_SHORT = ['Y+N', 'E+W']
+        row_h = 34
+
+        for rnd in reversed(self.round_history):
+            if y + row_h > py + ph - 4:
+                break
+            icon, icon_color = RESULT_ICON.get(rnd['result'], ('?', C_TEXT))
+            ct_short = TEAM_SHORT[rnd['ct']]
+            s0, s1   = rnd['scores_after']
+
+            row_bg = '#0d2a1e' if rnd['round_num'] % 2 == 0 else '#081a11'
+            self.cv.create_rectangle(px + 4, y, px + SCORE_W - 4, y + row_h - 2,
+                                     fill=row_bg, outline='')
+
+            # Round number
+            self.cv.create_text(px + 12, y + 5,
+                                text=f'#{rnd["round_num"]}',
+                                fill=C_GRAY, font=('Helvetica', 8), anchor='nw')
+            # Icon
+            self.cv.create_text(px + 34, y + 5,
+                                text=icon,
+                                fill=icon_color, font=('Helvetica', 9, 'bold'), anchor='nw')
+            # Taker label
+            self.cv.create_text(px + 50, y + 5,
+                                text=ct_short,
+                                fill=icon_color, font=('Helvetica', 8, 'bold'), anchor='nw')
+            # Points for this round
+            self.cv.create_text(px + SCORE_W - 8, y + 5,
+                                text=f'{rnd["taker_pts"]}–{rnd["def_pts"]}',
+                                fill=C_DIM, font=('Helvetica', 8), anchor='ne')
+            # Running total
+            self.cv.create_text(px + 12, y + 19,
+                                text=f'YN:{s0}  EW:{s1}',
+                                fill=C_DIM, font=('Helvetica', 8), anchor='nw')
+            y += row_h
 
     def _draw_trick_area(self):
         CX, CY = self.CX, self.CY
@@ -420,7 +508,7 @@ class BeloteApp:
             spread = min(CH + 4, avail // max(n, 1))
             sy = CY - (spread*(n-1) + CH) // 2
             for i in range(n):
-                self._draw_card_back(W - CW - 70, sy + i*spread)
+                self._draw_card_back(W - SCORE_W - CW - 12, sy + i*spread)
         elif pos == 'left':
             avail  = H - 250
             spread = min(CH + 4, avail // max(n, 1))
@@ -431,9 +519,9 @@ class BeloteApp:
     def _draw_suggestions(self):
         W, CX, CY = self.W, self.CX, self.CY
         hint_pos = {
-            1: (W - CW - 150, CY - 28),
-            2: (CX - 24,      CY - 168),
-            3: (145,           CY - 28),
+            1: (W - SCORE_W - CW - 80, CY - 28),
+            2: (CX - 24,               CY - 168),
+            3: (145,                   CY - 28),
         }
         for pidx in (1, 2, 3):
             if not self.hands[pidx] or not self.trump:
@@ -624,9 +712,11 @@ class BeloteApp:
 
     # ── Game flow ──────────────────────────────────────────────────────────────
     def _new_game(self):
-        self.scores     = [0, 0]
-        self.litige_pts = 0
-        self.dealer     = 0
+        self.scores        = [0, 0]
+        self.litige_pts    = 0
+        self.round_num     = 0
+        self.round_history = []
+        self.dealer        = 0
         self._new_round()
 
     def _new_round(self):
@@ -842,6 +932,7 @@ class BeloteApp:
             self.scores[at] += 162 + self.belote_pts[at] + self.litige_pts
             self.litige_pts  = 0
 
+        self.round_num += 1
         self.round_info = {
             'result':          result,
             'ct':              ct,
@@ -853,6 +944,14 @@ class BeloteApp:
             'belote_team':     belote_team,
             'litige_after':    self.litige_pts,
         }
+        self.round_history.append({
+            'round_num':    self.round_num,
+            'result':       result,
+            'ct':           ct,
+            'taker_pts':    taker_pts,
+            'def_pts':      def_pts,
+            'scores_after': list(self.scores),
+        })
 
         self.dealer = (self.dealer + 1) % 4
         self.status.config(text='Round over – see results')
