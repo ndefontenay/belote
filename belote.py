@@ -117,34 +117,78 @@ def _hand_score(hand: List[Card], trump: str) -> float:
             + sum(1 for c in hand if c.suit == trump) * 7)
 
 
-def ai_bid_round1(hand: List[Card], revealed_suit: str) -> bool:
-    return _hand_score(hand, revealed_suit) >= 58
+def _is_master(card: Card, trump: str, played: set) -> bool:
+    """True if no unplayed card can beat this card in its suit."""
+    order = TRUMP_ORDER if card.suit == trump else PLAIN_ORDER
+    idx   = order.index(card.rank)
+    return all(Card(card.suit, r) in played for r in order[:idx])
+
+
+def ai_bid_round1(hand: List[Card], revealed_card: Card) -> bool:
+    """See AI_RULES.md – Bidding Round 1."""
+    suit = revealed_card.suit
+    # Rule 1: J is on the table → always take
+    if revealed_card.rank == 'J':
+        return True
+    # Rule 2: AI holds the J of the offered suit → take
+    if any(c.suit == suit and c.rank == 'J' for c in hand):
+        return True
+    # Rule 3: AI holds the 9 + ≥1 other trump → 3 trumps with revealed card
+    trump_in_hand = sum(1 for c in hand if c.suit == suit)
+    if any(c.suit == suit and c.rank == '9' for c in hand) and trump_in_hand >= 2:
+        return True
+    # Fallback: score heuristic
+    return _hand_score(hand, suit) >= 58
 
 
 def ai_bid_round2(hand: List[Card], revealed_suit: str) -> Optional[str]:
-    best_suit, best_score = None, 54
+    """See AI_RULES.md – Bidding Round 2."""
+    best_suit, best_score = None, 40
     for s in SUITS:
         if s == revealed_suit:
             continue
         sc = _hand_score(hand, s)
+        if any(c.suit == s and c.rank == 'J' for c in hand):
+            sc += 20
+        trump_count = sum(1 for c in hand if c.suit == s)
+        if any(c.suit == s and c.rank == '9' for c in hand) and trump_count >= 2:
+            sc += 10
         if sc > best_score:
             best_score, best_suit = sc, s
     return best_suit
 
 
 def ai_play(hand: List[Card], trick: List[Tuple[int, Card]],
-            trump: str, me: int) -> Card:
-    plays = legal_plays(hand, trick, trump, me)
+            trump: str, me: int,
+            played_cards: Optional[List[Card]] = None,
+            contract_player: int = -1) -> Card:
+    """See AI_RULES.md – Playing."""
+    plays   = legal_plays(hand, trick, trump, me)
+    played  = set(played_cards) if played_cards else set()
+    partner = (me + 2) % 4
+    partner_has_contract = (contract_player >= 0
+                            and contract_player % 2 == me % 2
+                            and contract_player != me)
 
     if not trick:
+        # Priority 1: lead a master card (guaranteed win)
+        masters = [c for c in plays if _is_master(c, trump, played)]
+        if masters:
+            return max(masters, key=lambda c: c.pts(trump))
         ts = [c for c in plays if c.suit == trump]
-        if ts:
+        # Priority 2: partner took contract → lead trump to drain opponents
+        if partner_has_contract and ts:
             return max(ts, key=lambda c: c.power(trump, trump))
+        # Priority 3: we took contract → lead trump aggressively
+        if contract_player == me and ts:
+            return max(ts, key=lambda c: c.power(trump, trump))
+        # Default: highest point value
         return max(plays, key=lambda c: c.pts(trump))
 
     led   = trick[0][1].suit
-    p_win = who_wins(trick, trump) == (me + 2) % 4
+    p_win = who_wins(trick, trump) == partner
 
+    # Partner winning → give them points
     if p_win:
         return max(plays, key=lambda c: c.pts(trump))
 
@@ -189,8 +233,11 @@ class BeloteApp:
         self.bid_round:       int              = 1
         self._bid_count:      int              = 0
         self.contract_player: int              = -1
-        self.trick:           List[Tuple[int, Card]] = []
-        self.trick_pts:       List[int]        = [0, 0]
+        self.trick:              List[Tuple[int, Card]] = []
+        self.played_cards:       List[Card]             = []
+        self.last_trick_taken:   List[Optional[list]]   = [None, None]
+        self.show_last_trick:    List[bool]             = [False, False]
+        self.trick_pts:          List[int]              = [0, 0]
         self.tricks_won:      List[int]        = [0, 0]
         self.belote_player:   int              = -1
         self.belote_played:   int              = 0
@@ -293,6 +340,7 @@ class BeloteApp:
         self._draw_scores()
         self._draw_trick_area()
         self._draw_all_hands()
+        self._draw_trick_stacks()
         if self.show_hints.get() and self.phase == 'playing' and self.trump:
             self._draw_suggestions()
         if self.phase == 'bidding':
@@ -451,6 +499,94 @@ class BeloteApp:
                                 fill=C_DIM, font=('Helvetica', 8), anchor='nw')
             y += row_h
 
+    def _toggle_trick_reveal(self, team: int):
+        self.show_last_trick[team] = not self.show_last_trick[team]
+        self._redraw()
+
+    def _draw_trick_stacks(self):
+        W, H, CX, CY = self.W, self.H, self.CX, self.CY
+        if not any(self.tricks_won):
+            return
+
+        # Team 0 (You+North): in front of South, bottom-left of centre
+        # Team 1 (East+West):  in front of West, left side
+        stack_pos = [
+            (CX - CW - 60,  H - CH - 110),
+            (148,            CY + 60),
+        ]
+        colors = [C_LIME, '#fca5a5']
+        labels = ['You+N', 'E+W']
+
+        for team, (sx, sy) in enumerate(stack_pos):
+            n = self.tricks_won[team]
+            if n == 0:
+                continue
+
+            depth = min(n, 4)
+            # Stacked card backs (depth effect)
+            for i in range(depth):
+                off = (depth - 1 - i) * 4
+                self._draw_card_back(sx + off, sy - off)
+
+            # Trick-count badge
+            bx = sx + CW + (depth - 1) * 4 - 6
+            by = sy - (depth - 1) * 4 - 8
+            self.cv.create_oval(bx, by, bx + 20, by + 20,
+                                fill='#991b1b', outline='white', width=1)
+            self.cv.create_text(bx + 10, by + 10, text=str(n),
+                                fill='white', font=('Helvetica', 8, 'bold'))
+
+            # Label + click hint
+            mid_x = sx + CW // 2 + (depth - 1) * 2
+            self.cv.create_text(mid_x, sy + CH + 12, text=labels[team],
+                                fill=colors[team], font=('Helvetica', 8, 'bold'))
+            hint = '▲ close' if self.show_last_trick[team] else '▼ peek'
+            self.cv.create_text(mid_x, sy + CH + 24, text=hint,
+                                fill=C_GRAY, font=('Helvetica', 7))
+
+            # Invisible click region
+            tag = f'tstack_{team}'
+            self.cv.create_rectangle(
+                sx - 2, sy - (depth - 1) * 4 - 2,
+                sx + CW + (depth - 1) * 4 + 2, sy + CH + 2,
+                fill='', outline='', tags=(tag,))
+            self.cv.tag_bind(tag, '<Button-1>',
+                             lambda e, t=team: self._toggle_trick_reveal(t))
+
+            # Last-trick reveal panel
+            if self.show_last_trick[team] and self.last_trick_taken[team]:
+                self._draw_last_trick_panel(sx, sy, team, depth)
+
+    def _draw_last_trick_panel(self, sx, sy, team: int, depth: int):
+        last  = self.last_trick_taken[team]
+        mw, mh, gap = 48, 66, 6
+        pw = len(last) * (mw + gap) - gap + 20
+        ph = mh + 46
+
+        if team == 0:
+            px = sx - (pw - CW) // 2 - (depth - 1) * 2
+            py = sy - ph - 10
+        else:
+            px = sx + CW + (depth - 1) * 4 + 14
+            py = sy - ph // 2 + CH // 2
+
+        # Clamp to visible canvas area
+        px = max(4, min(px, self.W - SCORE_W - pw - 4))
+        py = max(4, py)
+
+        self._rrect(px, py, pw, ph, r=8, fill='#0a2218', outline=C_GOLD, width=2)
+        self.cv.create_text(px + pw // 2, py + 12,
+                            text='Last trick', fill=C_GOLD,
+                            font=('Helvetica', 9, 'bold'))
+
+        for i, (pidx, card) in enumerate(last):
+            cx = px + 10 + i * (mw + gap)
+            cy = py + 22
+            self._draw_mini_card(cx, cy, card)
+            self.cv.create_text(cx + mw // 2, cy + mh + 9,
+                                text=PLAYER_NAMES[pidx][:3],
+                                fill=C_GRAY, font=('Helvetica', 7))
+
     def _draw_trick_area(self):
         CX, CY = self.CX, self.CY
         self.cv.create_oval(CX-105, CY-110, CX+105, CY+110,
@@ -532,7 +668,8 @@ class BeloteApp:
         for pidx in (1, 2, 3):
             if not self.hands[pidx] or not self.trump:
                 continue
-            card = ai_play(self.hands[pidx], self.trick, self.trump, pidx)
+            card = ai_play(self.hands[pidx], self.trick, self.trump, pidx,
+                           self.played_cards, self.contract_player)
             sx, sy = hint_pos[pidx]
             self.cv.create_rectangle(sx-6, sy-18, sx+56, sy+74,
                                      fill='#111', outline=C_GOLD, width=2)
@@ -786,10 +923,13 @@ class BeloteApp:
         self.revealed_card  = deck[20]
         self.remaining_deck = deck[21:]
 
-        self.trump           = None
-        self.contract_player = -1
-        self.trick           = []
-        self.trick_pts       = [0, 0]
+        self.trump              = None
+        self.contract_player    = -1
+        self.trick              = []
+        self.played_cards       = []
+        self.last_trick_taken   = [None, None]
+        self.show_last_trick    = [False, False]
+        self.trick_pts          = [0, 0]
         self.tricks_won      = [0, 0]
         self.belote_player   = -1
         self.belote_played   = 0
@@ -835,7 +975,7 @@ class BeloteApp:
             return
         pidx = self.current
         if self.bid_round == 1:
-            if ai_bid_round1(self.hands[pidx], self.revealed_card.suit):
+            if ai_bid_round1(self.hands[pidx], self.revealed_card):
                 self._apply_take(pidx, None)
             else:
                 self._apply_pass(pidx)
@@ -902,7 +1042,8 @@ class BeloteApp:
         if self.phase != 'playing' or self.current == 0:
             return
         card = ai_play(self.hands[self.current], self.trick,
-                       self.trump, self.current)
+                       self.trump, self.current,
+                       self.played_cards, self.contract_player)
         self._play_card(self.current, card)
 
     def _play_card(self, pidx: int, card: Card):
@@ -934,6 +1075,10 @@ class BeloteApp:
         pts    = sum(c.pts(self.trump) for _, c in self.trick)
         self.trick_pts[team]  += pts
         self.tricks_won[team] += 1
+
+        for _, card in self.trick:
+            self.played_cards.append(card)
+        self.last_trick_taken[team] = list(self.trick)
 
         is_last = not self.hands[0]
         if is_last:
