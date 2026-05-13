@@ -422,7 +422,6 @@ class BeloteApp:
                             fill=BG, outline=C_GREEN, width=3)
         info = [
             (CX,              H-mg,  'YOU  (South)',          True),
-            (W-SCORE_W-mg//2, CY,    'East  (AI)',             False),
             (CX,              50,    'North  (AI · partner)',  True),
         ]
         for x, y, label, partner in info:
@@ -697,6 +696,16 @@ class BeloteApp:
         self._draw_ai_back(2, 'top')
         self._draw_ai_back(1, 'right')
         self._draw_ai_back(3, 'left')
+        # East label above its cards
+        n1 = len(self.hands[1])
+        if n1 > 0:
+            avail_v = self.H - 250
+            sp1     = min(CH + 4, avail_v // max(n1, 1))
+            east_top_y = self.CY - (sp1 * (n1 - 1) + CH) // 2
+            east_cx    = self.W - SCORE_W - CW - 12 + CW // 2
+            self.cv.create_text(east_cx, east_top_y - 16,
+                                text='East  (AI)', fill=C_TEXT,
+                                font=('Helvetica', 11, 'bold'), anchor='center')
         mg = 85
         self.cv.create_text(mg, self.CY, text='West  (AI)', fill=C_TEXT,
                             font=('Helvetica', 11, 'bold'), anchor='center')
@@ -740,7 +749,7 @@ class BeloteApp:
         vert_top = CY - (spreadv * (n_vert - 1) + CH) // 2
         chip_pos = {
             0: (south_right + 14,          H - CH - 18),
-            1: (W - SCORE_W - CW - 12 + CW + 14, vert_top),
+            1: (W - SCORE_W - CW - 12 - 14,      vert_top),
             2: (CX + (spread * (max(len(self.hands[2]), 1) - 1) + CW) // 2 + 14, 68),
             3: (70 + CW + 14,              vert_top),
         }
