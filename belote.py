@@ -586,42 +586,102 @@ class BeloteApp:
             self.cv.create_oval(bx-3, by-2, bx+3, by+2, fill='#f4a0c0', outline='', tags=tags)
 
     def _draw_back_ocean(self, x, y, tags=()):
-        self._rrect(x, y, CW, CH, fill='#071e40', outline='#4a90d9', width=2, tags=tags)
-        # Sky gradient (lighter at horizon)
-        self.cv.create_rectangle(x, y, x+CW, y+45, fill='#0a2a52', outline='', tags=tags)
-        # Moon / sun disk
-        self.cv.create_oval(x+36, y+6, x+52, y+22, fill='#f5f0c8', outline='#e8d87a', width=1, tags=tags)
-        # Mt Fuji silhouette
-        self.cv.create_polygon(
-            [x+20,y+44, x+44,y+10, x+68,y+44],
-            fill='#1a3a5c', outline='', tags=tags)
-        self.cv.create_polygon(
-            [x+38,y+10, x+44,y+10, x+50,y+18, x+44,y+22, x+38,y+18],
-            fill='#d8eaf8', outline='', tags=tags)
+        # Cream/beige background like a woodblock print
+        self._rrect(x, y, CW, CH, fill='#f0e6d0', outline='#1a3a6b', width=2, tags=tags)
+        self.cv.create_rectangle(x, y, x+CW, y+44, fill='#ece0c4', outline='', tags=tags)
 
-        def wave(wy, amplitude, color, foam_color, tags):
-            pts = [x, y+wy+amplitude]
-            step = 11
-            for i in range(0, CW+step, step):
-                mid_x = x + i + step//2
-                pts += [mid_x, y+wy - amplitude, x + i + step, y+wy + amplitude]
-            pts += [x+CW, y+CH, x, y+CH]
-            self.cv.create_polygon(pts, fill=color, outline='', smooth=False, tags=tags)
-            # Foam tips
-            for i in range(0, CW, step):
-                fx = x + i + step//2
-                fy = y + wy - amplitude
-                self.cv.create_oval(fx-4, fy-3, fx+4, fy+4,
-                                    fill=foam_color, outline='', tags=tags)
-                # Claw lines
-                for dx in (-3, 0, 3):
-                    self.cv.create_line(fx+dx, fy+2, fx+dx, fy+7,
-                                        fill=foam_color, width=1, tags=tags)
+        # Distant mountain silhouettes
+        self.cv.create_polygon([x+2,y+44, x+20,y+16, x+38,y+44],
+                               fill='#c0d0e0', outline='', tags=tags)
+        self.cv.create_polygon([x+26,y+44, x+46,y+10, x+66,y+44],
+                               fill='#a8bcce', outline='', tags=tags)
+        self.cv.create_polygon([x+52,y+44, x+68,y+20, x+86,y+44],
+                               fill='#b4c8d8', outline='', tags=tags)
 
-        wave(54,  7,  '#0e3d7a', '#c8dff5', tags)
-        wave(70,  6,  '#0a3068', '#d0e8fa', tags)
-        wave(86,  5,  '#082655', '#daeeff', tags)
-        wave(100, 4,  '#061c40', '#e0f0ff', tags)
+        # Main wave outer body (dark navy)
+        self.cv.create_polygon([
+            x,    y+CH,
+            x,    y+74,
+            x+6,  y+58,
+            x+14, y+44,
+            x+24, y+32,
+            x+36, y+23,
+            x+50, y+18,
+            x+64, y+21,
+            x+75, y+28,
+            x+83, y+38,
+            x+87, y+50,
+            x+85, y+62,
+            x+88, y+72,
+            x+88, y+CH,
+        ], fill='#1a3a6b', outline='', tags=tags)
+
+        # Wave hollow inner face (medium blue)
+        self.cv.create_polygon([
+            x+18, y+56,
+            x+26, y+40,
+            x+38, y+30,
+            x+51, y+26,
+            x+63, y+29,
+            x+73, y+38,
+            x+78, y+50,
+            x+74, y+60,
+            x+62, y+66,
+            x+48, y+68,
+            x+34, y+65,
+            x+22, y+62,
+        ], fill='#3a6aaa', outline='', smooth=True, tags=tags)
+
+        # Lighter water deep inside the hollow
+        self.cv.create_polygon([
+            x+30, y+46,
+            x+40, y+36,
+            x+51, y+33,
+            x+62, y+36,
+            x+69, y+46,
+            x+65, y+56,
+            x+54, y+62,
+            x+44, y+62,
+            x+34, y+58,
+        ], fill='#6898c8', outline='', smooth=True, tags=tags)
+
+        # Foam claws along the crest
+        def claw(cx_, cy_):
+            self.cv.create_oval(cx_-5, cy_-3, cx_+5, cy_+5, fill='white', outline='', tags=tags)
+            for dx in (-4, -1, 2, 5):
+                self.cv.create_line(cx_+dx, cy_+4, cx_+dx-1, cy_+10,
+                                    fill='white', width=1, tags=tags)
+
+        for cx_, cy_ in [(x+16,y+47),(x+26,y+32),(x+38,y+23),(x+52,y+18),
+                         (x+66,y+21),(x+77,y+29),(x+85,y+40)]:
+            claw(cx_, cy_)
+
+        # Scattered foam dots inside hollow
+        for fx, fy in [(38,44),(50,38),(60,42),(54,52),(44,54)]:
+            self.cv.create_oval(x+fx-2, y+fy-2, x+fx+2, y+fy+2,
+                                fill='white', outline='', tags=tags)
+
+        # Second smaller wave at the bottom
+        self.cv.create_polygon([
+            x,    y+CH,
+            x,    y+90,
+            x+8,  y+83,
+            x+22, y+88,
+            x+36, y+81,
+            x+52, y+86,
+            x+66, y+79,
+            x+80, y+83,
+            x+88, y+80,
+            x+88, y+CH,
+        ], fill='#142e5c', outline='', tags=tags)
+
+        # Small foam claws on bottom wave
+        for fx, fy in [(8,83),(22,88),(36,81),(52,86),(66,79),(80,83)]:
+            self.cv.create_oval(x+fx-3, y+fy-2, x+fx+3, y+fy+3,
+                                fill='white', outline='', tags=tags)
+            for dx in (-2, 1):
+                self.cv.create_line(x+fx+dx, y+fy+2, x+fx+dx, y+fy+6,
+                                    fill='white', width=1, tags=tags)
 
     def _draw_card_face(self, x, y, card: Card, *,
                         highlight=False, dim=False, large=False, tags=()):
