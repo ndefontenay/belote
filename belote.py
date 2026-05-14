@@ -1133,7 +1133,6 @@ class BeloteApp:
         if self.phase == 'dealing_anim':
             self._draw_deal_anim_overlay()
         elif self.phase == 'taking_anim':
-            self._draw_all_hands()
             self._draw_deal_anim_overlay()
         else:
             self._draw_all_hands()
