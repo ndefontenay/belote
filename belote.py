@@ -770,6 +770,11 @@ class BeloteApp:
         self.lang            = tk.StringVar(value='en')
         self._fw_particles: list = []
         self._fw_active:    bool = False
+        # Deal animation state
+        self._anim_seq:     list = []
+        self._anim_flying         = None
+        self._anim_done_cb        = None
+        self._anim_counts:  dict = {0: 0, 1: 0, 2: 0, 3: 0}
 
         # Live layout (updated on every redraw from canvas size)
         self.W  = DEFAULT_W
@@ -1125,7 +1130,13 @@ class BeloteApp:
         self._draw_table()
         self._draw_scores()
         self._draw_trick_area()
-        self._draw_all_hands()
+        if self.phase == 'dealing_anim':
+            self._draw_deal_anim_overlay()
+        elif self.phase == 'taking_anim':
+            self._draw_all_hands()
+            self._draw_deal_anim_overlay()
+        else:
+            self._draw_all_hands()
         self._draw_trick_stacks()
         self._draw_contract_chip()
         if self.show_hints.get() and self.phase == 'playing' and self.trump:
@@ -1949,10 +1960,14 @@ class BeloteApp:
             self._deck = fresh_deck()
             random.shuffle(self._deck)
 
-        # Stop any running fireworks
+        # Stop any running fireworks or deal animation
         self._fw_active    = False
         self._fw_particles = []
         self.cv.delete('fw')
+        self._anim_seq     = []
+        self._anim_flying  = None
+        self._anim_done_cb = None
+        self._anim_counts  = {0: 0, 1: 0, 2: 0, 3: 0}
 
         # Reset round state (hands dealt later in _do_deal)
         self.trump               = None
@@ -2007,8 +2022,13 @@ class BeloteApp:
         self.revealed_card  = deck[20]
         self.remaining_deck = list(deck[21:])
         self.current        = start
-        self.phase          = 'bidding'
 
+        steps = self._build_deal_steps(start)
+        self._start_anim(steps, phase='dealing_anim',
+                         on_done=self._after_deal_anim)
+
+    def _after_deal_anim(self):
+        self.phase = 'bidding'
         self.status.config(text=self.t('bid_r1'))
         self._redraw()
         if self.current != 0:
@@ -2066,9 +2086,14 @@ class BeloteApp:
         self.status.config(
             text=self.t('p_takes', player=self.pname(pidx), mode=mode_label,
                         rnd=self.t('rnd1' if self.bid_round == 1 else 'rnd2')))
+        steps = self._build_take_steps(pidx)
         self._deal_remaining(pidx)
         for h in self.hands:
             _sort_hand(h, self.trump)
+        self._start_anim(steps, phase='taking_anim',
+                         on_done=self._after_take_anim)
+
+    def _after_take_anim(self):
         self._detect_belote()
         self._compute_annonces()
         self._show_announcing()
@@ -2312,6 +2337,113 @@ class BeloteApp:
         self._redraw()
         if capot_winner == 0:
             self.root.after(500, self._launch_fireworks)
+
+    # ── Deal animation ─────────────────────────────────────────────────────────
+    def _anim_card_dest(self, pidx: int):
+        W, H, CX, CY = self.W, self.H, self.CX, self.CY
+        if pidx == 0: return CX,                  H - CH - 18
+        if pidx == 1: return W - SCORE_W - CW - 12, CY
+        if pidx == 2: return CX,                  68
+        return 70, CY
+
+    def _build_deal_steps(self, start: int) -> list:
+        CX, CY = self.CX, self.CY
+        src, steps = (CX, CY), []
+        for n_cards in (3, 2):
+            for i in range(4):
+                pidx = (start + i) % 4
+                tx, ty = self._anim_card_dest(pidx)
+                for _ in range(n_cards):
+                    steps.append({'from': src, 'to': (tx, ty),
+                                  'pidx': pidx, 'face_up': False})
+        return steps
+
+    def _build_take_steps(self, taker_idx: int) -> list:
+        CX, CY = self.CX, self.CY
+        src, steps = (CX, CY), []
+        tx, ty = self._anim_card_dest(taker_idx)
+        steps.append({'from': src, 'to': (tx, ty),
+                      'pidx': taker_idx, 'face_up': True,
+                      'card': self.revealed_card})
+        start = (self.dealer + 1) % 4
+        for i in range(4):
+            pidx = (start + i) % 4
+            dtx, dty = self._anim_card_dest(pidx)
+            for _ in range(2 if pidx == taker_idx else 3):
+                steps.append({'from': src, 'to': (dtx, dty),
+                              'pidx': pidx, 'face_up': False})
+        return steps
+
+    def _start_anim(self, steps: list, phase: str, on_done):
+        self._anim_seq     = list(steps)
+        self._anim_done_cb = on_done
+        self._anim_flying  = None
+        self._anim_counts  = {0: 0, 1: 0, 2: 0, 3: 0}
+        self.phase         = phase
+        self._anim_next()
+
+    def _anim_next(self):
+        if not self._anim_seq:
+            self._anim_flying = None
+            cb, self._anim_done_cb = self._anim_done_cb, None
+            if cb: cb()
+            return
+        step = self._anim_seq.pop(0)
+        fx, fy = step['from']
+        tx, ty = step['to']
+        self._anim_flying = {
+            'from_x': float(fx), 'from_y': float(fy),
+            'tx': float(tx),     'ty': float(ty),
+            'x':  float(fx),     'y':  float(fy),
+            'card':    step.get('card'),
+            'face_up': step.get('face_up', False),
+            'pidx':    step.get('pidx'),
+            'step': 0, 'total': 6,
+        }
+        self._anim_tick()
+
+    def _anim_tick(self):
+        f = self._anim_flying
+        if not f:
+            return
+        f['step'] += 1
+        t     = f['step'] / f['total']
+        ease  = 1 - (1 - t) ** 2
+        f['x'] = f['from_x'] + (f['tx'] - f['from_x']) * ease
+        f['y'] = f['from_y'] + (f['ty'] - f['from_y']) * ease
+        self._redraw()
+        if f['step'] >= f['total']:
+            if f['pidx'] is not None:
+                self._anim_counts[f['pidx']] += 1
+            self._anim_flying = None
+            self.root.after(12, self._anim_next)
+        else:
+            self.root.after(18, self._anim_tick)
+
+    def _draw_deal_anim_overlay(self):
+        CX, CY = self.CX, self.CY
+        if self.phase == 'dealing_anim':
+            # Deck stack at center
+            dx, dy = CX - CW // 2, CY - CH // 2 - 6
+            for i in range(4, -1, -1):
+                self._draw_card_back(dx + i, dy - i)
+            # Arrived piles at each player position
+            for pidx, count in self._anim_counts.items():
+                if count == 0:
+                    continue
+                cx, cy = self._anim_card_dest(pidx)
+                px, py = cx - CW // 2, cy - CH // 2
+                for i in range(min(count, 8)):
+                    self._draw_card_back(px + i * 2, py - i * 2)
+        # Flying card
+        f = self._anim_flying
+        if f:
+            cx = int(f['x']) - CW // 2
+            cy = int(f['y']) - CH // 2
+            if f['face_up'] and f.get('card'):
+                self._draw_card_face(cx, cy, f['card'], large=True)
+            else:
+                self._draw_card_back(cx, cy)
 
     # ── Fireworks ──────────────────────────────────────────────────────────────
     def _launch_fireworks(self):
