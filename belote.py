@@ -2367,7 +2367,7 @@ class BeloteApp:
                       'card': self.revealed_card})
         start = (self.dealer + 1) % 4
         for i in range(4):
-            pidx = (start + i) % 4
+            pidx = (start - i) % 4
             dtx, dty = self._anim_card_dest(pidx)
             for _ in range(2 if pidx == taker_idx else 3):
                 steps.append({'from': src, 'to': (dtx, dty),
