@@ -892,11 +892,6 @@ class BeloteApp:
                 activebackground=BG_DARK, activeforeground=C_TEXT,
                 font=('Helvetica', 13, 'bold')).pack(side='right', padx=4, pady=8)
 
-        self._card_back_lbl = tk.Label(
-            bar, text=STRINGS[lang]['card_back'],
-            bg=BG_DARK, fg=C_TEXT, font=('Helvetica', 13))
-        self._card_back_lbl.pack(side='right', padx=(12, 4))
-
         self._back_rbs = []
         for i, key in enumerate(['blossom', 'ocean']):
             rb = tk.Radiobutton(
@@ -908,6 +903,11 @@ class BeloteApp:
                 font=('Helvetica', 13))
             rb.pack(side='right', padx=6, pady=8)
             self._back_rbs.append(rb)
+
+        self._card_back_lbl = tk.Label(
+            bar, text=STRINGS[lang]['card_back'],
+            bg=BG_DARK, fg=C_TEXT, font=('Helvetica', 13))
+        self._card_back_lbl.pack(side='right', padx=(12, 4))
 
     # ── i18n helpers ───────────────────────────────────────────────────────────
     def t(self, key: str, **kwargs) -> str:
