@@ -1133,6 +1133,9 @@ class BeloteApp:
         if self.phase == 'dealing_anim':
             self._draw_deal_anim_overlay()
         elif self.phase == 'taking_anim':
+            real_hands, self.hands = self.hands, self._pre_take_hands
+            self._draw_all_hands()
+            self.hands = real_hands
             self._draw_deal_anim_overlay()
         else:
             self._draw_all_hands()
@@ -2086,6 +2089,7 @@ class BeloteApp:
             text=self.t('p_takes', player=self.pname(pidx), mode=mode_label,
                         rnd=self.t('rnd1' if self.bid_round == 1 else 'rnd2')))
         steps = self._build_take_steps(pidx)
+        self._pre_take_hands = [list(h) for h in self.hands]
         self._deal_remaining(pidx)
         for h in self.hands:
             _sort_hand(h, self.trump)
