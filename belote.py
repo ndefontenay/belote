@@ -2351,7 +2351,7 @@ class BeloteApp:
         src, steps = (CX, CY), []
         for n_cards in (3, 2):
             for i in range(4):
-                pidx = (start + i) % 4
+                pidx = (start - i) % 4
                 tx, ty = self._anim_card_dest(pidx)
                 for _ in range(n_cards):
                     steps.append({'from': src, 'to': (tx, ty),
