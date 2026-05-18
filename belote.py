@@ -1354,9 +1354,10 @@ class BeloteApp:
                                 text=f'{pl:<3} ({pl_pts})',
                                 fill=pl_clr, font=('Helvetica', 12))
 
-    def _toggle_trick_reveal(self, team: int):
+    def _toggle_trick_reveal(self, team: int) -> str:
         self.show_last_trick[team] = not self.show_last_trick[team]
         self._redraw()
+        return 'break'   # stop event propagating to the canvas-level click handler
 
     def _draw_trick_stacks(self):
         W, H, CX, CY = self.W, self.H, self.CX, self.CY
