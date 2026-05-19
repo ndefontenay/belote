@@ -2017,14 +2017,15 @@ class BeloteApp:
         cut = random.randint(max(1, n // 4), min(n - 1, 3 * n // 4))
         deck = self._deck[cut:] + self._deck[:cut]
 
-        start = (self.dealer + 1) % 4
+        deal_start = (self.dealer + 1) % 4   # dealing order (any order is fine)
+        bid_start  = (self.dealer + 3) % 4   # first to bid = first clockwise after dealer
         for i in range(4):
-            pidx = (start + i) % 4
+            pidx = (deal_start + i) % 4
             self.hands[pidx] = list(deck[i*5 : i*5+5])
 
         self.revealed_card  = deck[20]
         self.remaining_deck = list(deck[21:])
-        self.current        = start
+        self.current        = bid_start
 
         steps = self._build_deal_steps(start)
         self._start_anim(steps, phase='dealing_anim',
@@ -2151,7 +2152,7 @@ class BeloteApp:
                 self.best_bid_rank   = 0
                 self.best_bid_player = -1
                 self.best_bid_mode   = None
-                self.current         = (self.dealer + 1) % 4
+                self.current         = (self.dealer + 3) % 4
                 self.status.config(text=self.t('bid_r2'))
                 self._redraw()
                 if self.current != 0:
