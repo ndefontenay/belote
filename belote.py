@@ -1166,12 +1166,12 @@ class BeloteApp:
         for x, y, label, partner in info:
             clr = C_LIME if partner else C_TEXT
             self.cv.create_text(x, y, text=label, fill=clr,
-                                font=('Helvetica', 14, 'bold'), anchor='center')
+                                font=('Helvetica', 18, 'bold'), anchor='center')
 
         arrow_pos = {
             0: (CX,                   H-mg-20),
             1: (W-SCORE_W-mg//2-50,  CY),
-            2: (CX,                   70),
+            2: (CX,                   68),
             3: (mg+70,                CY),
         }
         if self.phase == 'playing' and self.current in arrow_pos:
@@ -1457,13 +1457,14 @@ class BeloteApp:
     def _draw_bid_action_labels(self):
         """Show each player's latest bid action (Passe / Prend / mode) near their seat."""
         CX, CY = self.CX, self.CY
-        # Positions: inset from each player's edge toward the table center
-        # North: anchor just below North's card row (cards start at y=68, height=CH)
-        north_bid_y = 68 + CH + 28
+        # Positions: inset from each player's edge toward the table center.
+        # North: CY-80 mirrors South's CY+80, but is clamped so it never
+        # rises back into the North card row (cards y=78..78+CH).
+        north_bid_y = max(CY - 80, 78 + CH + 20)
         seats = {
             0: (CX,       CY + 80),      # South
             1: (CX + 145, CY),           # East
-            2: (CX,       north_bid_y),  # North – below card row, never overlaps name
+            2: (CX,       north_bid_y),  # North
             3: (CX - 145, CY),           # West
         }
         for pidx, lbl in self.bid_actions.items():
@@ -1540,7 +1541,7 @@ class BeloteApp:
             east_cx    = self.W - SCORE_W - CW - 12 + CW // 2
             self.cv.create_text(east_cx, east_top_y - 16,
                                 text=self.t('east_ai'), fill=C_TEXT,
-                                font=('Helvetica', 14, 'bold'), anchor='center')
+                                font=('Helvetica', 18, 'bold'), anchor='center')
         n3 = len(self.hands[3])
         if n3 > 0:
             avail_v = self.H - 250
@@ -1549,7 +1550,7 @@ class BeloteApp:
             west_cx    = 70 + CW // 2
             self.cv.create_text(west_cx, west_top_y - 16,
                                 text=self.t('west_ai'), fill=C_TEXT,
-                                font=('Helvetica', 14, 'bold'), anchor='center')
+                                font=('Helvetica', 18, 'bold'), anchor='center')
 
     def _draw_ai_back(self, pidx: int, pos: str):
         W, H, CX, CY = self.W, self.H, self.CX, self.CY
@@ -1561,7 +1562,7 @@ class BeloteApp:
             spread = min(CW + 6, avail // max(n, 1))
             sx = CX - (spread*(n-1) + CW) // 2
             for i in range(n):
-                self._draw_card_back(sx + i*spread, 68)
+                self._draw_card_back(sx + i*spread, 78)
         elif pos == 'right':
             avail  = H - 250
             spread = min(CH + 4, avail // max(n, 1))
@@ -1591,7 +1592,7 @@ class BeloteApp:
         chip_pos = {
             0: (south_right + 14,          H - CH - 18),
             1: (W - SCORE_W - CW - 12 - 14,      vert_top),
-            2: (CX + (spread * (max(len(self.hands[2]), 1) - 1) + CW) // 2 + 14, 68),
+            2: (CX + (spread * (max(len(self.hands[2]), 1) - 1) + CW) // 2 + 14, 78),
             3: (70 + CW + 14,              vert_top),
         }
         cpx, cpy = chip_pos[self.contract_player]
@@ -2363,7 +2364,7 @@ class BeloteApp:
         W, H, CX, CY = self.W, self.H, self.CX, self.CY
         if pidx == 0: return CX,                  H - CH - 18
         if pidx == 1: return W - SCORE_W - CW - 12, CY
-        if pidx == 2: return CX,                  68
+        if pidx == 2: return CX,                  78
         return 70, CY
 
     def _build_deal_steps(self, start: int) -> list:
