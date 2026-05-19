@@ -1447,11 +1447,13 @@ class BeloteApp:
         """Show each player's latest bid action (Passe / Prend / mode) near their seat."""
         CX, CY = self.CX, self.CY
         # Positions: inset from each player's edge toward the table center
+        # North: anchor just below North's card row (cards start at y=68, height=CH)
+        north_bid_y = 68 + CH + 28
         seats = {
-            0: (CX,       CY + 80),   # South
-            1: (CX + 145, CY),        # East
-            2: (CX,       CY - 80),   # North
-            3: (CX - 145, CY),        # West
+            0: (CX,       CY + 80),      # South
+            1: (CX + 145, CY),           # East
+            2: (CX,       north_bid_y),  # North – below card row, never overlaps name
+            3: (CX - 145, CY),           # West
         }
         for pidx, lbl in self.bid_actions.items():
             x, y = seats[pidx]
