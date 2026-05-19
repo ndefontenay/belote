@@ -1278,10 +1278,14 @@ class BeloteApp:
             'capot':   ('★', '#ff9f40'),
         }
         TEAM_SHORT = [self.t('team0_short'), self.t('team1_short')]
-        row_h      = 34
         ORDER_H    = 210  # height reserved at bottom for card order section
 
         for rnd in reversed(self.round_history):
+            ann_winner = rnd.get('ann_winner', -1)
+            ann_pts    = rnd.get('ann_pts', [0, 0])
+            has_decl   = ann_winner >= 0 and ann_pts[ann_winner] > 0
+            row_h      = 46 if has_decl else 34
+
             if y + row_h > py + ph - ORDER_H - 4:
                 break
             icon, icon_color = RESULT_ICON.get(rnd['result'], ('?', C_TEXT))
@@ -1312,6 +1316,13 @@ class BeloteApp:
             self.cv.create_text(px + 12, y + 19,
                                 text=f'YN:{s0}  EW:{s1}',
                                 fill=C_DIM, font=('Helvetica', 11), anchor='nw')
+            # Declaration bonus row (only when declarations were won)
+            if has_decl:
+                decl_team  = TEAM_SHORT[ann_winner]
+                decl_label = f'♦ Decl {decl_team} +{ann_pts[ann_winner]}'
+                self.cv.create_text(px + 12, y + 33,
+                                    text=decl_label,
+                                    fill=C_GOLD, font=('Helvetica', 10, 'bold'), anchor='nw')
             y += row_h
 
         # ── Card order reference (bottom of panel) ───────────────────────────
@@ -2336,6 +2347,8 @@ class BeloteApp:
             'taker_pts':    taker_pts,
             'def_pts':      def_pts,
             'scores_after': list(self.scores),
+            'ann_winner':   self.annonce_winner_team,
+            'ann_pts':      list(self.annonce_pts),
         })
 
         self.dealer = (self.dealer + 3) % 4
