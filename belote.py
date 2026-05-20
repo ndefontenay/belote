@@ -2041,7 +2041,7 @@ class BeloteApp:
         self.remaining_deck = list(deck[21:])
         self.current        = bid_start
 
-        steps = self._build_deal_steps(start)
+        steps = self._build_deal_steps(deal_start)
         self._start_anim(steps, phase='dealing_anim',
                          on_done=self._after_deal_anim)
 
